@@ -74,3 +74,29 @@ if __name__=='__main__':
                 f.write('\n'.join(samples[10000:10100]))
             with open(f'{args.base_dir}/dataset/{dirname}/tst.txt', 'w') as f:
                 f.write('\n'.join(samples[10100:10200]))
+
+        trn_samples = []
+        val_samples = []
+        tst_samples = []
+        for n in range(1,6):
+            dirname = f'nback-{n}_{args.vocab_size}_{args.max_prob}_{args.seq_len}_{args.seed}'
+            with open(f'{args.base_dir}/dataset/{dirname}/trn.txt', 'r') as f:
+                loaded_samples = f.read().split('\n')
+            trn_samples.extend(loaded_samples)
+
+            with open(f'{args.base_dir}/dataset/{dirname}/val.txt', 'r') as f:
+                loaded_samples = f.read().split('\n')
+            val_samples.extend(loaded_samples)
+
+            with open(f'{args.base_dir}/dataset/{dirname}/tst.txt', 'r') as f:
+                loaded_samples = f.read().split('\n')
+            tst_samples.extend(loaded_samples)
+
+        dirname = f'nback-all_{args.vocab_size}_{args.max_prob}_{args.seq_len}_{args.seed}'
+        os.makedirs(f'{args.base_dir}/dataset/{dirname}',exist_ok=True)
+        with open(f'{args.base_dir}/dataset/{dirname}/trn.txt', 'w') as f:
+            f.write('\n'.join(trn_samples))
+        with open(f'{args.base_dir}/dataset/{dirname}/val.txt', 'w') as f:
+            f.write('\n'.join(val_samples))
+        with open(f'{args.base_dir}/dataset/{dirname}/tst.txt', 'w') as f:
+            f.write('\n'.join(tst_samples))
