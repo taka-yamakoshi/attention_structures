@@ -28,7 +28,6 @@ if __name__ == '__main__':
     args.base_dir = os.environ.get("MY_DATA_PATH")
 
     files = load_dataset(args)
-    os.makedirs(f'{args.base_dir}/models', exist_ok = True)
 
     if args.model_type == 'bert':
         from transformers import BertTokenizerFast
