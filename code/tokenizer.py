@@ -5,8 +5,7 @@ import argparse
 import torch
 from tokenizers import models, pre_tokenizers, normalizers, trainers, processors, Tokenizer
 
-def gen_dataset_name(args):
-    return f'{args.graph_type}_{args.vocab_size}_{args.max_prob}_{args.seq_len}_{args.seed}'
+from utils import gen_dataset_name
 
 def load_dataset(args):
     dirname = gen_dataset_name(args)
