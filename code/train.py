@@ -4,7 +4,7 @@ import argparse
 import os
 import math
 
-from transformers import AutoTokenizer, AutoModelForCausalLM,DataCollatorForLanguageModeling
+from transformers import AutoTokenizer, AutoModelForCausalLM, DataCollatorForLanguageModeling
 from datasets import load_dataset
 
 from utils import gen_dataset_name, gen_run_name, seed_everything
@@ -22,16 +22,16 @@ def load_config(model_type,args):
     if model_type=='bert':
         from transformers import BertConfig
         assert len(args.tokenizer(args.tokenizer.pad_token).input_ids)==3
-        config_kwargs['pad_token_id'] = args.tokenizer(args.tokenizer.pad_token).input_ids[1:-1][0]
+        config_kwargs['pad_token_id'] = args.tokenizer(args.tokenizer.pad_token).input_ids[1]
         return BertConfig(**config_kwargs)
     elif model_type=='albert':
         from transformers import AlbertConfig
         assert len(args.tokenizer(args.tokenizer.pad_token).input_ids)==3
         assert len(args.tokenizer(args.tokenizer.bos_token).input_ids)==3
         assert len(args.tokenizer(args.tokenizer.eos_token).input_ids)==3
-        config_kwargs['pad_token_id'] = args.tokenizer(args.tokenizer.pad_token).input_ids[1:-1][0]
-        config_kwargs['bos_token_id'] = args.tokenizer(args.tokenizer.bos_token).input_ids[1:-1][0]
-        config_kwargs['eos_token_id'] = args.tokenizer(args.tokenizer.eos_token).input_ids[1:-1][0]
+        config_kwargs['pad_token_id'] = args.tokenizer(args.tokenizer.pad_token).input_ids[1]
+        config_kwargs['bos_token_id'] = args.tokenizer(args.tokenizer.bos_token).input_ids[1]
+        config_kwargs['eos_token_id'] = args.tokenizer(args.tokenizer.eos_token).input_ids[1]
         config_kwargs['embedding_size'] = getattr(args,f'hidden_size')
         return AlbertConfig(**config_kwargs)
     elif model_type=='gpt2':
@@ -78,11 +78,12 @@ def load_sentences(args):
 
     tokenized_dataset = process_dataset(dataset, args, remove_cols)
     tokenized_dataset = tokenized_dataset.with_format("torch")
+    tokenized_dataset['trn'] = tokenized_dataset['trn'].shuffle(seed=args.run_seed)
     tokenized_dataset['trn'] = tokenized_dataset['trn'].filter(lambda example, idx: idx < args.datasize, with_indices=True)
     return tokenized_dataset
 
 def gen_scheduler(optimizer, args):
-    num_steps = args.num_epochs*math.ceil(args.datasize/args.batchsize_train)
+    num_steps = args.num_epochs*math.ceil(args.datasize/args.batchsize_trn)
     if args.scheduler_type=='linear':
         scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1.0, end_factor=0.0, total_iters=num_steps)
     elif args.scheduler_type=='constant':
@@ -108,7 +109,7 @@ def evaluate(model, loaders, args):
                                 labels=loaded_examples['labels'],
                                 attention_mask=loaded_examples['attention_mask'],
                                 output_attentions=True)
-                loss_list.append(outputs.loss.item()/len(loaded_examples['input_ids']))
+                loss_list.append(outputs.loss.item())
             out.append(np.mean(loss_list))
     return out
 
@@ -139,6 +140,12 @@ if __name__=='__main__':
     parser.add_argument('--core_id', type = int, default = 0)
     args = parser.parse_args()
     print(f'running with {args}')
+
+    import wandb
+    wandb.require("core")
+    wandb.init(project="attn_struct_nobias")
+    wandb.config.update(args.__dict__)
+
     args.base_dir = os.environ.get("MY_DATA_PATH")
     args.device = torch.device("cuda", index=int(args.core_id))
 
@@ -149,22 +156,15 @@ if __name__=='__main__':
 
     seed_everything(args.run_seed)
 
-    import wandb
-    wandb.init(project="attn_struct")
-    config = wandb.config
-    config.lr = args.lr
-    config.datasize = args.datasize
-    config.num_layers = args.num_layers
-    config.num_heads = args.num_heads
-    config.hidden_size = args.hidden_size
-    config.intermediate_size = args.intermediate_size
-    config.batchsize_trn = args.batchsize_trn
-    config.batchsize_val = args.batchsize_val
-
     args.dataset_name = gen_dataset_name(args)
     if args.graph_type.startswith('nback'):
         # Load the tokenizer for all n's
         args.tokenizer = AutoTokenizer.from_pretrained(f'{args.base_dir}/tokenizers/{args.model_type}_nback-all_{args.vocab_size}_{args.max_prob}_{args.seq_len}_{args.seed}')
+    if args.model_type in ['gpt2','llama2']:
+        args.tokenizer.pad_token = args.tokenizer.eos_token
+
+    wandb.config.run_name = args.run_name
+    wandb.config.dataset_name = args.dataset_name
 
     dataset = load_sentences(args)
     data_collator = DataCollatorForLanguageModeling(tokenizer=args.tokenizer,mlm=False)
@@ -201,7 +201,7 @@ if __name__=='__main__':
     best_val_loss = np.inf
     for epoch in range(args.num_epochs):
         model.train()
-        dataset['trn'].shuffle(seed=args.run_seed+epoch)
+        dataset['trn'] = dataset['trn'].shuffle(seed=args.run_seed+epoch)
         for examples in trn_loader:
             loaded_examples = examples.to(args.device)
             optimizer.zero_grad()
