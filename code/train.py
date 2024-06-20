@@ -141,39 +141,45 @@ if __name__=='__main__':
     args = parser.parse_args()
     print(f'running with {args}')
 
+    # Initialize weights and biases with args
     import wandb
     wandb.require("core")
     wandb.init(project="attn_struct_nobias")
     wandb.config.update(args.__dict__)
 
+    # Set the storage path
     args.base_dir = os.environ.get("MY_DATA_PATH")
-    args.device = torch.device("cuda", index=int(args.core_id))
-
     args.cache_dir = f'{args.base_dir}/cache'
     os.makedirs(args.cache_dir, exist_ok=True)
 
-    args.run_name = gen_run_name(args)
+    # Set the device
+    args.device = torch.device("cuda", index=int(args.core_id))
 
+    # Generate the dataset name and the run name
+    args.dataset_name = gen_dataset_name(args)
+    args.run_name = gen_run_name(args)
+    wandb.config.dataset_name = args.dataset_name
+    wandb.config.run_name = args.run_name
+
+    # Fix the seed
     seed_everything(args.run_seed)
 
-    args.dataset_name = gen_dataset_name(args)
+    # Load the tokenizer
     if args.graph_type.startswith('nback'):
         # Load the tokenizer for all n's
         args.tokenizer = AutoTokenizer.from_pretrained(f'{args.base_dir}/tokenizers/{args.model_type}_nback-all_{args.vocab_size}_{args.max_prob}_{args.seq_len}_{args.seed}')
     if args.model_type in ['gpt2','llama2']:
         args.tokenizer.pad_token = args.tokenizer.eos_token
 
-    wandb.config.run_name = args.run_name
-    wandb.config.dataset_name = args.dataset_name
-
+    # Load the dataset and the data collator
     dataset = load_sentences(args)
     data_collator = DataCollatorForLanguageModeling(tokenizer=args.tokenizer,mlm=False)
 
-    trn_loader = torch.utils.data.DataLoader(dataset['trn'], batch_size=args.batchsize_trn,
-                                             collate_fn=data_collator)
+    # Create the dataloaders
     val_loaders = []
     tst_loaders = []
     if args.graph_type.startswith('nback'):
+        # Create separate dataloaders for all n's
         for n in range(1,6):
             args.dataset_name = f'nback-{n}_{args.vocab_size}_{args.max_prob}_{args.seq_len}_{args.seed}'
             eval_dataset = load_sentences(args)
@@ -185,11 +191,13 @@ if __name__=='__main__':
             tst_loaders.append(tst_loader)
         args.dataset_name = gen_dataset_name(args)
 
+    # Load the model
     config = load_config(args.model_type,args)
     model = AutoModelForCausalLM.from_config(config)
     model.resize_token_embeddings(len(args.tokenizer))
     model.to(args.device)
 
+    # Create the optimizer and the scheduler
     optimizer = torch.optim.AdamW(model.parameters(),lr=args.lr)
     scheduler = gen_scheduler(optimizer, args)
 
@@ -202,6 +210,8 @@ if __name__=='__main__':
     for epoch in range(args.num_epochs):
         model.train()
         dataset['trn'] = dataset['trn'].shuffle(seed=args.run_seed+epoch)
+        trn_loader = torch.utils.data.DataLoader(dataset['trn'], batch_size=args.batchsize_trn,
+                                                 collate_fn=data_collator)
         for examples in trn_loader:
             loaded_examples = examples.to(args.device)
             optimizer.zero_grad()
