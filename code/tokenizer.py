@@ -29,23 +29,23 @@ if __name__ == '__main__':
     files = load_dataset(args)
 
     if args.model_type == 'bert':
-        from transformers import BertTokenizer
-        tokenizer_wrapper = BertTokenizer
+        from transformers import BertTokenizerFast
+        tokenizer_wrapper = BertTokenizerFast
         special_tokens = ['[UNK]','[CLS]','[SEP]','[PAD]','[MASK]']
         unk_token, bos_token, eos_token = '[UNK]', '[CLS]', '[SEP]'
     elif args.model_type == 'albert':
-        from transformers import AlbertTokenizer
-        tokenizer_wrapper = AlbertTokenizer
+        from transformers import AlbertTokenizerFast
+        tokenizer_wrapper = AlbertTokenizerFast
         special_tokens = ['<unk>','[CLS]','[SEP]','<pad>','[MASK]']
         unk_token, bos_token, eos_token = '<unk>', '[CLS]', '[SEP]'
     elif args.model_type=='gpt2':
-        from transformers import GPT2Tokenizer
-        tokenizer_wrapper = GPT2Tokenizer
+        from transformers import GPT2TokenizerFast
+        tokenizer_wrapper = GPT2TokenizerFast
         special_tokens = ['<|endoftext|>']
         unk_token = '<|endoftext|>'
     elif args.model_type=='llama2':
-        from transformers import LlamaTokenizer
-        tokenizer_wrapper = LlamaTokenizer
+        from transformers import LlamaTokenizerFast
+        tokenizer_wrapper = LlamaTokenizerFast
         special_tokens = ['<unk>','<s>','</s>']
         unk_token, bos_token, eos_token = '<unk>','<s>','</s>'
     else:
