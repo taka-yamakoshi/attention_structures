@@ -7,6 +7,8 @@ import math
 from transformers import AutoTokenizer, AutoModelForCausalLM, DataCollatorForLanguageModeling
 from datasets import load_dataset
 
+import ot
+
 from utils import gen_dataset_name, gen_run_name, seed_everything
 
 def load_config(model_type,args):
@@ -98,20 +100,59 @@ def gen_scheduler(optimizer, args):
     return scheduler
 
 def evaluate(model, loaders, args):
-    out = []
+    main_out = []
+    attn_out = []
     model.eval()
     with torch.no_grad():
         for loader in loaders:
-            loss_list = []
+            main_loss_list = []
+            attn_loss_list = []
             for examples in loader:
                 loaded_examples = examples.to(args.device)
                 outputs = model(input_ids=loaded_examples['input_ids'],
                                 labels=loaded_examples['labels'],
                                 attention_mask=loaded_examples['attention_mask'],
                                 output_attentions=True)
-                loss_list.append(outputs.loss.item())
-            out.append(np.mean(loss_list))
-    return out
+                if args.bias=='nobias':
+                    attn_loss = 0
+                else:
+                    templates = get_templates(args, outputs.attentions[0].shape[-1])
+                    attn_loss = calc_attn_loss(outputs.attentions, templates)
+                main_loss_list.append(outputs.loss.item())
+                attn_loss_list.append(attn_loss)
+            main_out.append(np.mean(main_loss_list))
+            attn_out.append(np.mean(attn_loss_list))
+    return main_out, attn_out
+
+def get_template_nback(n:int, seq_len:int):
+    # adjusted for next toke prediction
+    mat = torch.tensor([[1 if j==i-(n-1) else 0
+                         for j in range(seq_len)]
+                         for i in range(seq_len)])
+    return mat
+
+def calc_wasserstein_distance(attn, temp):
+    assert len(attn.shape)==2 and len(temp.shape)==2
+    assert attn.shape[0]==attn.shape[1] and temp.shape[0]==temp.shape[1]
+    seq_len = attn.shape[0]
+    u_values = torch.arange(seq_len).repeat(seq_len,1).T
+    v_values = torch.arange(seq_len).repeat(seq_len,1).T
+    u_weights = attn.T
+    v_weights = temp.T
+    return torch.mean(ot.wasserstein_1d(u_values, v_values, u_weights, v_weights))
+
+def get_templates(args, seq_len):
+    ns = [1,2,3,4,5] if args.bias=='nback-all' else [int(args.bias.replace('nback-', ''))]
+    return [get_template_nback(n,seq_len).to(args.device) for n in ns]
+
+def calc_attn_loss(attentions, templates):
+    attn_loss = 0
+    for attn_layer in attentions:
+        for attn_batch in attn_layer:
+            for attn in attn_batch:
+                for temp in templates:
+                    attn_loss += calc_wasserstein_distance(attn, temp)/len(templates)
+    return attn_loss
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
@@ -129,11 +170,12 @@ if __name__=='__main__':
 
     parser.add_argument('--datasize', type = int, default = 1000)
     parser.add_argument('--bias', type = str, default = 'nobias')
+    parser.add_argument('--beta', type = float, default = 0.1)
 
     parser.add_argument('--batchsize_trn', type = int, default = 10)
     parser.add_argument('--batchsize_val', type = int, default = 100)
     parser.add_argument('--lr', type = float, default = 1e-3)
-    parser.add_argument('--scheduler_type', type = str, default = 'linear')
+    parser.add_argument('--scheduler_type', type = str, default = 'constant')
     parser.add_argument('--num_epochs', type = int, default = 5)
     parser.add_argument('--run_seed', type = int, default = 1234)
 
@@ -144,7 +186,7 @@ if __name__=='__main__':
     # Initialize weights and biases with args
     import wandb
     wandb.require("core")
-    wandb.init(project="attn_struct_nobias")
+    wandb.init(project="attn_struct_datasize")
     wandb.config.update(args.__dict__)
 
     # Set the storage path
@@ -219,7 +261,13 @@ if __name__=='__main__':
                             labels=loaded_examples['labels'],
                             attention_mask=loaded_examples['attention_mask'],
                             output_attentions=True)
-            loss = outputs.loss
+            if args.bias=='nobias':
+                attn_loss = 0
+            else:
+                templates = get_templates(args, outputs.attentions[0].shape[-1])
+                attn_loss = calc_attn_loss(outputs.attentions, templates)
+            main_loss = outputs.loss
+            loss = main_loss + args.beta*attn_loss
             loss.backward()
             optimizer.step()
             scheduler.step()
@@ -228,15 +276,24 @@ if __name__=='__main__':
             if step_id%100==0:
                 wandb.log(data={
                         'train/lr':lr,
-                        'train/loss':loss.item()},
+                        'train/main_loss':main_loss.item(),
+                        'train/attn_loss':attn_loss,
+                        'train/loss':loss.item(),
+                        },
                         step=step_id)
-
-        val_loss = evaluate(model,val_loaders,args)
-        wandb.log(data={f'val-{n}':loss for n, loss in zip(np.arange(1,6), val_loss)},step=step_id)
-        model.save_pretrained(f"{args.base_dir}/models/{args.run_name}/ckpt-{step_id}")
-        if np.mean(val_loss)<best_val_loss:
-            best_val_loss = np.mean(val_loss)
-            model.save_pretrained(f"{args.base_dir}/models/{args.run_name}/best")
-            print(f'new best val loss: {best_val_loss}')
-
-    wandb.log(data={f'tst-{n}':loss for n, loss in zip(np.arange(1,6), evaluate(model,tst_loaders,args))})
+        if epoch%(max(args.num_epochs//10,1))==0:
+            val_main_loss, val_attn_loss = evaluate(model,val_loaders,args)
+            wandb.log(data={f'validation/val-main-{n}':loss 
+                            for n, loss in zip(np.arange(1,6), val_main_loss)},step=step_id)
+            wandb.log(data={f'validation/val-attn-{n}':loss 
+                            for n, loss in zip(np.arange(1,6), val_attn_loss)},step=step_id)
+            model.save_pretrained(f"{args.base_dir}/models/{args.run_name}/ckpt-{step_id}")
+            val_loss = np.mean(val_main_loss)+args.beta*np.mean(val_attn_loss)
+            if val_loss<best_val_loss:
+                best_val_loss = val_loss
+                model.save_pretrained(f"{args.base_dir}/models/{args.run_name}/best")
+                print(f'new best val loss: {best_val_loss}')
+    model.save_pretrained(f"{args.base_dir}/models/{args.run_name}/last")
+    tst_main_loss, tst_attn_loss = evaluate(model,tst_loaders,args)
+    wandb.log(data={f'tst-main-{n}':loss for n, loss in zip(np.arange(1,6), tst_main_loss)})
+    wandb.log(data={f'tst-attn-{n}':loss for n, loss in zip(np.arange(1,6), tst_attn_loss)})
