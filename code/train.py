@@ -117,7 +117,8 @@ def evaluate(model, loaders, args):
                     attn_loss = 0
                 else:
                     templates = get_templates(args, outputs.attentions[0].shape[-1])
-                    attn_loss = calc_attn_loss(outputs.attentions, templates)
+                    layer_ids = np.arange(args.num_layers) if args.bias.split('-')[2]=='all' else [int(args.bias.split('-')[2])]
+                    attn_loss = calc_attn_loss(outputs.attentions, templates, layer_ids)
                 main_loss_list.append(outputs.loss.item())
                 attn_loss_list.append(attn_loss)
             main_out.append(np.mean(main_loss_list))
@@ -142,16 +143,17 @@ def calc_wasserstein_distance(attn, temp):
     return torch.mean(ot.wasserstein_1d(u_values, v_values, u_weights, v_weights))
 
 def get_templates(args, seq_len):
-    ns = [1,2,3,4,5] if args.bias=='nback-all' else [int(args.bias.replace('nback-', ''))]
+    ns = [1,2,3,4,5] if args.bias=='nback-all' else [int(args.bias.split('-')[1])]
     return [get_template_nback(n,seq_len).to(args.device) for n in ns]
 
-def calc_attn_loss(attentions, templates):
+def calc_attn_loss(attentions, templates, layer_ids):
     attn_loss = 0
-    for attn_layer in attentions:
-        for attn_batch in attn_layer:
-            for attn in attn_batch:
-                for temp in templates:
-                    attn_loss += calc_wasserstein_distance(attn, temp)/len(templates)
+    for layer_id, attn_layer in enumerate(attentions):
+        if layer_id in layer_ids:
+            for attn_batch in attn_layer:
+                for attn in attn_batch:
+                    for temp in templates:
+                        attn_loss += calc_wasserstein_distance(attn, temp)/len(templates)
     return attn_loss
 
 if __name__=='__main__':
@@ -268,7 +270,8 @@ if __name__=='__main__':
                 attn_loss = 0
             else:
                 templates = get_templates(args, outputs.attentions[0].shape[-1])
-                attn_loss = calc_attn_loss(outputs.attentions, templates)
+                layer_ids = np.arange(args.num_layers) if args.bias.split('-')[2]=='all' else [int(args.bias.split('-')[2])]
+                attn_loss = calc_attn_loss(outputs.attentions, templates, layer_ids)
             main_loss = outputs.loss
             loss = main_loss + args.beta*attn_loss
             loss.backward()
