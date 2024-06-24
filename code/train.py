@@ -186,7 +186,7 @@ if __name__=='__main__':
     # Initialize weights and biases with args
     import wandb
     wandb.require("core")
-    wandb.init(project="attn_struct_datasize")
+    wandb.init(project="attn_struct_nobias_2layers")
     wandb.config.update(args.__dict__)
 
     # Set the storage path
@@ -244,8 +244,11 @@ if __name__=='__main__':
     scheduler = gen_scheduler(optimizer, args)
 
     step_id = 0
-    wandb.log(data={f'val-{n}':loss for n, loss in zip(np.arange(1,6), evaluate(model,val_loaders,args))},
-              step=step_id)
+    val_main_loss, val_attn_loss = evaluate(model,val_loaders,args)
+    wandb.log(data={f'validation/val-main-{n}':loss
+                    for n, loss in zip(np.arange(1,6), val_main_loss)},step=step_id)
+    wandb.log(data={f'validation/val-attn-{n}':loss
+                    for n, loss in zip(np.arange(1,6), val_attn_loss)},step=step_id)
     model.save_pretrained(f"{args.base_dir}/models/{args.run_name}/ckpt-{step_id}")
 
     best_val_loss = np.inf
