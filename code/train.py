@@ -114,13 +114,13 @@ def evaluate(model, loaders, args):
                                 attention_mask=loaded_examples['attention_mask'],
                                 output_attentions=True)
                 if args.bias=='nobias':
-                    attn_loss = 0
+                    attn_loss = torch.tensor([0]).to(args.device)
                 else:
                     templates = get_templates(args, outputs.attentions[0].shape[-1])
                     layer_ids = np.arange(args.num_layers) if args.bias.split('-')[2]=='all' else [int(args.bias.split('-')[2])]
                     attn_loss = calc_attn_loss(outputs.attentions, templates, layer_ids)
                 main_loss_list.append(outputs.loss.item())
-                attn_loss_list.append(attn_loss)
+                attn_loss_list.append(attn_loss.item())
             main_out.append(np.mean(main_loss_list))
             attn_out.append(np.mean(attn_loss_list))
     return main_out, attn_out
@@ -140,10 +140,11 @@ def calc_wasserstein_distance(attn, temp):
     v_values = torch.arange(seq_len).repeat(seq_len,1).T
     u_weights = attn.T
     v_weights = temp.T
-    return torch.mean(ot.wasserstein_1d(u_values, v_values, u_weights, v_weights))
+    device = u_weights.device
+    return torch.mean(ot.wasserstein_1d(u_values.to(device), v_values.to(device), u_weights, v_weights))
 
 def get_templates(args, seq_len):
-    ns = [1,2,3,4,5] if args.bias=='nback-all' else [int(args.bias.split('-')[1])]
+    ns = [1,2,3,4,5] if args.bias.startswith('nback-all') else [int(args.bias.split('-')[1])]
     return [get_template_nback(n,seq_len).to(args.device) for n in ns]
 
 def calc_attn_loss(attentions, templates, layer_ids):
@@ -188,7 +189,7 @@ if __name__=='__main__':
     # Initialize weights and biases with args
     import wandb
     wandb.require("core")
-    wandb.init(project="attn_struct_nobias_2layers")
+    wandb.init(project="attn_struct_attnbias")
     wandb.config.update(args.__dict__)
 
     # Set the storage path
@@ -267,7 +268,7 @@ if __name__=='__main__':
                             attention_mask=loaded_examples['attention_mask'],
                             output_attentions=True)
             if args.bias=='nobias':
-                attn_loss = 0
+                attn_loss = torch.tensor([0]).to(args.device)
             else:
                 templates = get_templates(args, outputs.attentions[0].shape[-1])
                 layer_ids = np.arange(args.num_layers) if args.bias.split('-')[2]=='all' else [int(args.bias.split('-')[2])]
@@ -283,7 +284,7 @@ if __name__=='__main__':
                 wandb.log(data={
                         'train/lr':lr,
                         'train/main_loss':main_loss.item(),
-                        'train/attn_loss':attn_loss,
+                        'train/attn_loss':attn_loss.item(),
                         'train/loss':loss.item(),
                         },
                         step=step_id)
