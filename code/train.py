@@ -189,7 +189,7 @@ if __name__=='__main__':
     # Initialize weights and biases with args
     import wandb
     wandb.require("core")
-    wandb.init(project="attn_struct_attnbias")
+    wandb.init(project="attn_struct_attnbias_datasize")
     wandb.config.update(args.__dict__)
 
     # Set the storage path
@@ -302,5 +302,11 @@ if __name__=='__main__':
                 print(f'new best val loss: {best_val_loss}')
     model.save_pretrained(f"{args.base_dir}/models/{args.run_name}/last")
     tst_main_loss, tst_attn_loss = evaluate(model,tst_loaders,args)
-    wandb.log(data={f'tst-main-{n}':loss for n, loss in zip(np.arange(1,6), tst_main_loss)})
-    wandb.log(data={f'tst-attn-{n}':loss for n, loss in zip(np.arange(1,6), tst_attn_loss)})
+    wandb.log(data={f'test-last/tst-main-{n}':loss for n, loss in zip(np.arange(1,6), tst_main_loss)})
+    wandb.log(data={f'test-last/tst-attn-{n}':loss for n, loss in zip(np.arange(1,6), tst_attn_loss)})
+
+    model = AutoModelForCausalLM.from_pretrained(f"{args.base_dir}/models/{args.run_name}/best")
+    model.to(args.device)
+    tst_main_loss, tst_attn_loss = evaluate(model,tst_loaders,args)
+    wandb.log(data={f'test-best/tst-main-{n}':loss for n, loss in zip(np.arange(1,6), tst_main_loss)})
+    wandb.log(data={f'test-best/tst-attn-{n}':loss for n, loss in zip(np.arange(1,6), tst_attn_loss)})
