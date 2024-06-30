@@ -113,48 +113,59 @@ def evaluate(model, loaders, args):
                                 labels=loaded_examples['labels'],
                                 attention_mask=loaded_examples['attention_mask'],
                                 output_attentions=True)
+                batch_size, num_heads, seq_len = outputs.attentions[0].shape[:-1]
                 if args.bias=='nobias':
-                    attn_loss = torch.tensor([0]).to(args.device)
+                    # calculate the attention loss just for evaluation
+                    args.bias = 'nback-all-1'
+                    templates = get_templates(args, seq_len, batch_size, num_heads)
+                    args.bias = 'nobias'
+                    layer_ids = [1]
                 else:
-                    templates = get_templates(args, outputs.attentions[0].shape[-1])
+                    templates = get_templates(args, seq_len, batch_size, num_heads)
                     layer_ids = np.arange(args.num_layers) if args.bias.split('-')[2]=='all' else [int(args.bias.split('-')[2])]
-                    attn_loss = calc_attn_loss(outputs.attentions, templates, layer_ids)
+                attn_loss = calc_attn_loss(outputs.attentions, templates, layer_ids)
                 main_loss_list.append(outputs.loss.item())
                 attn_loss_list.append(attn_loss.item())
             main_out.append(np.mean(main_loss_list))
             attn_out.append(np.mean(attn_loss_list))
     return main_out, attn_out
 
-def get_template_nback(n:int, seq_len:int):
+def get_template_nback(n:int, seq_len:int, batch_size:int, num_heads:int):
     # adjusted for next toke prediction
-    mat = torch.tensor([[1 if j==i-(n-1) else 0
-                         for j in range(seq_len)]
-                         for i in range(seq_len)])
+    mat = torch.tensor([[[[1 if j==i-(n-1) else 0
+                           for j in range(seq_len)]
+                           for i in range(seq_len)]
+                           for _ in range(num_heads)]
+                           for _ in range(batch_size)])
     return mat
 
-def calc_wasserstein_distance(attn, temp):
-    assert len(attn.shape)==2 and len(temp.shape)==2
-    assert attn.shape[0]==attn.shape[1] and temp.shape[0]==temp.shape[1]
-    seq_len = attn.shape[0]
-    u_values = torch.arange(seq_len).repeat(seq_len,1).T
-    v_values = torch.arange(seq_len).repeat(seq_len,1).T
-    u_weights = attn.T
-    v_weights = temp.T
+def calc_wasserstein_distance(attns:torch.Tensor, temps:torch.Tensor):
+    assert attns.shape == temps.shape
+    assert len(attns.shape)  == 5
+    seq_len = attns.shape[-1]
+    u_values = torch.arange(seq_len).repeat(*attns.shape[:3],seq_len,1).permute((4,0,1,2,3))
+    v_values = torch.arange(seq_len).repeat(*temps.shape[:3],seq_len,1).permute((4,0,1,2,3))
+    u_weights = attns.permute((4,0,1,2,3))
+    v_weights = temps.permute((4,0,1,2,3))
     device = u_weights.device
-    return torch.mean(ot.wasserstein_1d(u_values.to(device), v_values.to(device), u_weights, v_weights))
+    return ot.wasserstein_1d(u_values.to(device), v_values.to(device), u_weights, v_weights)
 
-def get_templates(args, seq_len):
+def get_templates(args, seq_len, batch_size, num_heads):
     ns = [1,2,3,4,5] if args.bias.startswith('nback-all') else [int(args.bias.split('-')[1])]
-    return [get_template_nback(n,seq_len).to(args.device) for n in ns]
+    return torch.stack([get_template_nback(n,seq_len,batch_size,num_heads).to(args.device) for n in ns])
 
-def calc_attn_loss(attentions, templates, layer_ids):
+def calc_attn_loss(attentions, temps, layer_ids):
     attn_loss = 0
     for layer_id, attn_layer in enumerate(attentions):
         if layer_id in layer_ids:
-            for attn_batch in attn_layer:
-                for attn in attn_batch:
-                    for temp in templates:
-                        attn_loss += calc_wasserstein_distance(attn, temp)/len(templates)
+            assert len(attn_layer.shape) == 4 and attn_layer.shape[2] == attn_layer.shape[3]
+            attns = torch.stack([attn_layer for _ in range(temps.shape[0])])
+
+            dist = calc_wasserstein_distance(attns, temps)
+            assert dist.shape == attns.shape[:-1]
+            min_dist = -torch.logsumexp(-dist, dim=0)
+            assert min_dist.shape == attns.shape[1:-1]
+            attn_loss += torch.mean(min_dist)
     return attn_loss
 
 if __name__=='__main__':
@@ -189,7 +200,7 @@ if __name__=='__main__':
     # Initialize weights and biases with args
     import wandb
     wandb.require("core")
-    wandb.init(project="attn_struct_attnbias_datasize")
+    wandb.init(project="attn_struct_attnbias_logsumexp")
     wandb.config.update(args.__dict__)
 
     # Set the storage path
@@ -267,10 +278,11 @@ if __name__=='__main__':
                             labels=loaded_examples['labels'],
                             attention_mask=loaded_examples['attention_mask'],
                             output_attentions=True)
+            batch_size, num_heads, seq_len = outputs.attentions[0].shape[:-1]
             if args.bias=='nobias':
                 attn_loss = torch.tensor([0]).to(args.device)
             else:
-                templates = get_templates(args, outputs.attentions[0].shape[-1])
+                templates = get_templates(args, seq_len, batch_size, num_heads)
                 layer_ids = np.arange(args.num_layers) if args.bias.split('-')[2]=='all' else [int(args.bias.split('-')[2])]
                 attn_loss = calc_attn_loss(outputs.attentions, templates, layer_ids)
             main_loss = outputs.loss
