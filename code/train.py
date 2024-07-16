@@ -200,7 +200,7 @@ if __name__=='__main__':
     # Initialize weights and biases with args
     import wandb
     wandb.require("core")
-    wandb.init(project="attn_struct_attnbias_logsumexp")
+    wandb.init(project="attn_struct_low_maxprob")
     wandb.config.update(args.__dict__)
 
     # Set the storage path

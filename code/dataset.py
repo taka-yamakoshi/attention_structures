@@ -1,10 +1,20 @@
 import numpy as np
 import string
+from typing import List
 import os
 import argparse
 import networkx as nx
 
-class SentenceGenerator(object):
+class Node(object):
+    def __init__(self, node_id, node_type):
+        self.id = node_id
+        self.type = node_type
+        self.prev = []
+        self.next = []
+    def __repr__(self):
+        return f'{self.type}{self.id}'
+
+class Nback(object):
     def __init__(self, graph_type: str, vocab_size: int, max_prob: float, seed:int=1234):
         '''
         graph_type: type of structure (e.g. nback)
@@ -46,9 +56,108 @@ class SentenceGenerator(object):
         samples = np.array([self.sample(mat, seq_len, rng) for _ in range(nsamples)])
         return np.hstack([np.array([[str(n)]]*nsamples), samples])
 
+class Tree(object):
+    def __init__(self, graph_type: str, vocab_size: int, max_prob: float, seed:int=1234):
+        '''
+        graph_type: type of structure (e.g. nback)
+        vocab_size: size of vocabulary
+        max_prob: probability assigned to the preferred transition
+        seed: random seed for the transition matrix
+        '''
+        self.graph_type = graph_type
+        self.vocab_size = vocab_size
+        self.max_prob = max_prob
+
+        self.vocab = list(np.arange(self.vocab_size))
+
+        # Create the transition matrix
+        rng = np.random.default_rng(seed=seed)
+        self.transition = {self.vocab[i]:np.array([max_prob if j==target else (1-max_prob)/(vocab_size-1)
+                                                   for j in range(vocab_size)])
+                                                   for i,target in enumerate(rng.permutation(vocab_size))}
+
+    def sample_graph(self, seq_len:int, rng:np.random.Generator):
+        '''
+        Generate a binary-branching tree structure with a given sequence length.
+        '''
+        num_tokens = 1
+        root = Node(0,'a')
+        terms = [root]
+        nodes = [root]
+        while num_tokens < seq_len:
+            node = terms.pop(0)
+            if rng.random()>0.7 and num_tokens <= seq_len-5: # bifurcation
+                b_node = Node(num_tokens,'b') # confusing due to 0 indexing
+                b_node.prev = [node]
+                node.next = [b_node]
+                nodes.append(b_node)
+
+                child_1 = Node(num_tokens+1,'a') # confusing due to 0 indexing
+                child_2 = Node(num_tokens+2,'a') # confusing due to 0 indexing
+                child_1.prev = [b_node]
+                child_2.prev = [b_node]
+                b_node.next = [child_1, child_2]
+                nodes.extend([child_1, child_2])
+
+                grandchild_1 = Node(num_tokens+3,'a')
+                grandchild_2 = Node(num_tokens+4,'a')
+                grandchild_1.prev = [child_1]
+                grandchild_2.prev = [child_2]
+                child_1.next = [grandchild_1]
+                child_2.next = [grandchild_2]
+                nodes.extend([grandchild_1, grandchild_2])
+
+                terms.extend([grandchild_1, grandchild_2])
+                num_tokens += 5
+            else:
+                next_node = Node(num_tokens,'a')
+                next_node.prev = [node]
+                node.next = [next_node]
+                nodes.append(next_node)
+
+                terms.append(next_node)
+                num_tokens += 1
+        return nodes, root
+
+    def sample_dfs(self, root: Node, rng: np.random.Generator):
+        stack = [root]
+        nodes = []
+        sent = []
+        while len(stack) > 0:
+            node = stack.pop(-1) # remove the last node in the stack
+            node.id = len(sent) # reset the node id to the position in the sentence
+            nodes.append(node)
+
+            # sample token
+            if len(node.prev)==0:
+                token = rng.choice(self.vocab)
+                token_type = 'a'
+            else:
+                token = rng.choice(self.vocab, p=self.transition[node.prev[0].value])
+                if len(node.next)==0:
+                    token_type = 'c'
+                else:
+                    token_type = node.type
+            node.value = token
+            sent.append(token_type+str(token))
+
+            # update stack
+            for child in node.next:
+                stack.append(child)
+        return nodes, sent
+
+    def convert_to_mat(self, nodes: List[Node]):
+        ids = np.array([int(node.__repr__()[1:]) for node in nodes])
+        assert np.all(ids == np.arange(len(ids)))
+        mat = []
+        for node in nodes:
+            mat.append([1 if len(node.prev)>0 and j==node.prev[0].id else 0 for j in range(len(ids))])
+        mat = np.array(mat)
+        return mat
+
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--graph_type', type = str, required = True, choices = ['nback'])
+    parser.add_argument('--graph_type', type = str, required = True, choices = ['nback','tree'])
     parser.add_argument('--vocab_size', type = int, default = 5)
     parser.add_argument('--max_prob', type=float, default = 0.8)
     parser.add_argument('--seq_len', type = int, default = 16)
@@ -58,7 +167,7 @@ if __name__=='__main__':
     args.base_dir = os.environ.get("MY_DATA_PATH")
 
     if args.graph_type == 'nback':
-        generator = SentenceGenerator(args.graph_type, args.vocab_size, args.max_prob, args.seed)
+        generator = Nback(args.graph_type, args.vocab_size, args.max_prob, args.seed)
         for n in range(1,6):
             dirname = f'nback-{n}_{args.vocab_size}_{args.max_prob}_{args.seq_len}_{args.seed}'
             os.makedirs(f'{args.base_dir}/dataset/{dirname}',exist_ok=True)
@@ -100,3 +209,97 @@ if __name__=='__main__':
             f.write('\n'.join(val_samples))
         with open(f'{args.base_dir}/dataset/{dirname}/tst.txt', 'w') as f:
             f.write('\n'.join(tst_samples))
+
+    elif args.graph_type == 'tree':
+        generator = Tree(args.graph_type, args.vocab_size, args.max_prob, args.seed)
+        rng = np.random.default_rng(seed=args.seed)
+
+        # Generate 120 distinct structures
+        roots = []
+        names = []
+        num_graphs = 0
+        while num_graphs < 120:
+            nodes, root = generator.sample_graph(args.seq_len, rng)
+            gname = ' '.join([node.__repr__() for node in nodes])
+            if gname not in names:
+                roots.append(root)
+                names.append(gname)
+                num_graphs += 1
+        assert len(roots) == 120
+
+        trn_mats = []
+        trn_samples = []
+        val_samples = []
+        tst_samples = []
+        for graph_id, root in enumerate(roots[:100]):
+            nodes, _ = generator.sample_dfs(root, rng)
+            mat = generator.convert_to_mat(nodes)
+            trn_mats.append(mat)
+
+            sents = []
+            for _ in range(2000):
+                _, sent = generator.sample_dfs(root, rng)
+                sents.append(' '.join(sent))
+            sents = list(set(sents))
+            assert len(sents) > 1200, "not enough sentences"
+            trn_samples.extend(sents[:1000])
+            val_samples.extend(sents[1000:1100])
+            tst_samples.extend(sents[1100:1200])
+
+            dirname = f'tree-{graph_id}_{args.vocab_size}_{args.max_prob}_{args.seq_len}_{args.seed}'
+            os.makedirs(f'{args.base_dir}/dataset/{dirname}',exist_ok=True)
+            np.save(f'{args.base_dir}/dataset/{dirname}/mat.npy', mat)
+            with open(f'{args.base_dir}/dataset/{dirname}/trn.txt', 'w') as f:
+                f.write('\n'.join(sents[:1000]))
+            with open(f'{args.base_dir}/dataset/{dirname}/val.txt', 'w') as f:
+                f.write('\n'.join(sents[1000:1100]))
+            with open(f'{args.base_dir}/dataset/{dirname}/tst.txt', 'w') as f:
+                f.write('\n'.join(sents[1100:1200]))
+
+        dirname = f'tree-all_{args.vocab_size}_{args.max_prob}_{args.seq_len}_{args.seed}'
+        os.makedirs(f'{args.base_dir}/dataset/{dirname}', exist_ok=True)
+        np.save(f'{args.base_dir}/dataset/{dirname}/trn_mat.npy', np.array(trn_mats))
+        with open(f'{args.base_dir}/dataset/{dirname}/trn.txt', 'w') as f:
+            f.write('\n'.join(trn_samples))
+        with open(f'{args.base_dir}/dataset/{dirname}/val.txt', 'w') as f:
+            f.write('\n'.join(val_samples))
+        with open(f'{args.base_dir}/dataset/{dirname}/tst.txt', 'w') as f:
+            f.write('\n'.join(tst_samples))
+
+        ex_val_samples = []
+        ex_val_mats = []
+        for graph_id, root in enumerate(roots[100:110]):
+            nodes, _ = generator.sample_dfs(root, rng)
+            mat = generator.convert_to_mat(nodes)
+            ex_val_mats.append(mat)
+
+            sents = []
+            for _ in range(200):
+                _, sent = generator.sample_dfs(root, rng)
+                sents.append(' '.join(sent))
+            sents = list(set(sents))
+            assert len(sents) > 100, "not enough sentences"
+            ex_val_samples.extend(sents[:100])
+
+        np.save(f'{args.base_dir}/dataset/{dirname}/ex_val_mat.npy', np.array(ex_val_mats))
+        with open(f'{args.base_dir}/dataset/{dirname}/ex_val.txt', 'w') as f:
+            f.write('\n'.join(ex_val_samples))
+
+        ex_tst_samples = []
+        ex_tst_mats = []
+        for graph_id, root in enumerate(roots[110:120]):
+            nodes, _ = generator.sample_dfs(root, rng)
+            mat = generator.convert_to_mat(nodes)
+            ex_tst_mats.append(mat)
+
+            sents = []
+            for _ in range(200):
+                _, sent = generator.sample_dfs(root, rng)
+                sents.append(' '.join(sent))
+            sents = list(set(sents))
+            assert len(sents) > 100, "not enough sentences"
+            ex_tst_samples.extend(sents[:100])
+
+        np.save(f'{args.base_dir}/dataset/{dirname}/ex_tst_mat.npy', np.array(ex_tst_mats))
+        with open(f'{args.base_dir}/dataset/{dirname}/ex_tst.txt', 'w') as f:
+            f.write('\n'.join(ex_tst_samples))
