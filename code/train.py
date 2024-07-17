@@ -74,13 +74,16 @@ def process_dataset(dataset,args,remove_cols):
     return tokenized_dataset
 
 def load_sentences(args):
-    data_files = {"trn": "trn.txt", "val": "val.txt", "tst": "tst.txt"}
+    if args.graph_type == 'tree-all':
+        data_files = {"trn": "trn.txt", "val": "val.txt", "tst": "tst.txt", "ex_val": "ex_val.txt", "ex_tst":"ex_tst.txt"}
+    else:
+        data_files = {"trn": "trn.txt", "val": "val.txt", "tst": "tst.txt"}
     dataset = load_dataset(f'{args.base_dir}/dataset/{args.dataset_name}', data_files=data_files, cache_dir=args.cache_dir)
     remove_cols = ['text']
 
     tokenized_dataset = process_dataset(dataset, args, remove_cols)
     tokenized_dataset = tokenized_dataset.with_format("torch")
-    tokenized_dataset['trn'] = tokenized_dataset['trn'].shuffle(seed=args.run_seed)
+    #tokenized_dataset['trn'] = tokenized_dataset['trn'].shuffle(seed=args.run_seed)
     tokenized_dataset['trn'] = tokenized_dataset['trn'].filter(lambda example, idx: idx < args.datasize, with_indices=True)
     return tokenized_dataset
 
@@ -114,16 +117,22 @@ def evaluate(model, loaders, args):
                                 attention_mask=loaded_examples['attention_mask'],
                                 output_attentions=True)
                 batch_size, num_heads, seq_len = outputs.attentions[0].shape[:-1]
-                if args.bias=='nobias':
-                    # calculate the attention loss just for evaluation
-                    args.bias = 'nback-all-1'
-                    templates = get_templates(args, seq_len, batch_size, num_heads)
-                    args.bias = 'nobias'
-                    layer_ids = [1]
-                else:
-                    templates = get_templates(args, seq_len, batch_size, num_heads)
-                    layer_ids = np.arange(args.num_layers) if args.bias.split('-')[2]=='all' else [int(args.bias.split('-')[2])]
-                attn_loss = calc_attn_loss(outputs.attentions, templates, layer_ids)
+                if args.graph_type.startswith('nback'):
+                    if args.bias=='nobias':
+                        # calculate the attention loss just for evaluation
+                        args.bias = 'nback-all-1'
+                        templates = get_templates(args, seq_len, batch_size, num_heads)
+                        args.bias = 'nobias'
+                        layer_ids = [1]
+                    else:
+                        templates = get_templates(args, seq_len, batch_size, num_heads)
+                        layer_ids = np.arange(args.num_layers) if args.bias.split('-')[2]=='all' else [int(args.bias.split('-')[2])]
+                    attn_loss = calc_attn_loss(outputs.attentions, templates, layer_ids)
+                elif args.graph_type.startswith('tree'):
+                    if args.bias=='nobias':
+                        attn_loss = torch.tensor([0]).to(args.device)
+                    else:
+                        raise NotImplementedError
                 main_loss_list.append(outputs.loss.item())
                 attn_loss_list.append(attn_loss.item())
             main_out.append(np.mean(main_loss_list))
@@ -200,7 +209,7 @@ if __name__=='__main__':
     # Initialize weights and biases with args
     import wandb
     wandb.require("core")
-    wandb.init(project="attn_struct_low_maxprob")
+    wandb.init(project="attn_struct_tree_first_pass")
     wandb.config.update(args.__dict__)
 
     # Set the storage path
@@ -224,6 +233,9 @@ if __name__=='__main__':
     if args.graph_type.startswith('nback'):
         # Load the tokenizer for all n's
         args.tokenizer = AutoTokenizer.from_pretrained(f'{args.base_dir}/tokenizers/{args.model_type}_nback-all_{args.vocab_size}_{args.max_prob}_{args.seq_len}_{args.seed}')
+    elif args.graph_type.startswith('tree'):
+        # Load the tokenizer for all trees
+        args.tokenizer = AutoTokenizer.from_pretrained(f'{args.base_dir}/tokenizers/{args.model_type}_tree-all_{args.vocab_size}_{args.max_prob}_{args.seq_len}_{args.seed}')
     if args.model_type in ['gpt2','llama2']:
         args.tokenizer.pad_token = args.tokenizer.eos_token
 
@@ -247,6 +259,22 @@ if __name__=='__main__':
             tst_loaders.append(tst_loader)
         args.dataset_name = gen_dataset_name(args)
 
+    elif args.graph_type.startswith('tree'):
+        # Create separate dataloaders for all trees
+        val_loader = torch.utils.data.DataLoader(dataset['val'], batch_size=args.batchsize_val,
+                                                 collate_fn=data_collator)
+        tst_loader = torch.utils.data.DataLoader(dataset['tst'], batch_size=args.batchsize_val,
+                                                 collate_fn=data_collator)
+        val_loaders.append(val_loader)
+        tst_loaders.append(tst_loader)
+        if args.graph_type=='tree-all':
+            ex_val_loader = torch.utils.data.DataLoader(dataset['ex_val'], batch_size=args.batchsize_val,
+                                                        collate_fn=data_collator)
+            ex_tst_loader = torch.utils.data.DataLoader(dataset['ex_tst'], batch_size=args.batchsize_val,
+                                                        collate_fn=data_collator)
+            val_loaders.append(ex_val_loader)
+            tst_loaders.append(ex_tst_loader)
+
     # Load the model
     config = load_config(args.model_type,args)
     model = AutoModelForCausalLM.from_config(config)
@@ -259,10 +287,10 @@ if __name__=='__main__':
 
     step_id = 0
     val_main_loss, val_attn_loss = evaluate(model,val_loaders,args)
-    wandb.log(data={f'validation/val-main-{n}':loss
-                    for n, loss in zip(np.arange(1,6), val_main_loss)},step=step_id)
-    wandb.log(data={f'validation/val-attn-{n}':loss
-                    for n, loss in zip(np.arange(1,6), val_attn_loss)},step=step_id)
+    wandb.log(data={f'validation/val-main-{i+1}':loss
+                    for i, loss in enumerate(val_main_loss)},step=step_id)
+    wandb.log(data={f'validation/val-attn-{i+1}':loss
+                    for i, loss in enumerate(val_attn_loss)},step=step_id)
     model.save_pretrained(f"{args.base_dir}/models/{args.run_name}/ckpt-{step_id}")
 
     best_val_loss = np.inf
@@ -302,10 +330,10 @@ if __name__=='__main__':
                         step=step_id)
         if epoch%(max(args.num_epochs//10,1))==0:
             val_main_loss, val_attn_loss = evaluate(model,val_loaders,args)
-            wandb.log(data={f'validation/val-main-{n}':loss 
-                            for n, loss in zip(np.arange(1,6), val_main_loss)},step=step_id)
-            wandb.log(data={f'validation/val-attn-{n}':loss 
-                            for n, loss in zip(np.arange(1,6), val_attn_loss)},step=step_id)
+            wandb.log(data={f'validation/val-main-{i+1}':loss
+                            for i, loss in enumerate(val_main_loss)},step=step_id)
+            wandb.log(data={f'validation/val-attn-{i+1}':loss
+                            for i, loss in enumerate(val_attn_loss)},step=step_id)
             model.save_pretrained(f"{args.base_dir}/models/{args.run_name}/ckpt-{step_id}")
             val_loss = np.mean(val_main_loss)+args.beta*np.mean(val_attn_loss)
             if val_loss<best_val_loss:
@@ -314,11 +342,11 @@ if __name__=='__main__':
                 print(f'new best val loss: {best_val_loss}')
     model.save_pretrained(f"{args.base_dir}/models/{args.run_name}/last")
     tst_main_loss, tst_attn_loss = evaluate(model,tst_loaders,args)
-    wandb.log(data={f'test-last/tst-main-{n}':loss for n, loss in zip(np.arange(1,6), tst_main_loss)})
-    wandb.log(data={f'test-last/tst-attn-{n}':loss for n, loss in zip(np.arange(1,6), tst_attn_loss)})
+    wandb.log(data={f'test-last/tst-main-{i+1}':loss for i, loss in enumerate(tst_main_loss)})
+    wandb.log(data={f'test-last/tst-attn-{i+1}':loss for i, loss in enumerate(tst_attn_loss)})
 
     model = AutoModelForCausalLM.from_pretrained(f"{args.base_dir}/models/{args.run_name}/best")
     model.to(args.device)
     tst_main_loss, tst_attn_loss = evaluate(model,tst_loaders,args)
-    wandb.log(data={f'test-best/tst-main-{n}':loss for n, loss in zip(np.arange(1,6), tst_main_loss)})
-    wandb.log(data={f'test-best/tst-attn-{n}':loss for n, loss in zip(np.arange(1,6), tst_attn_loss)})
+    wandb.log(data={f'test-best/tst-main-{i+1}':loss for i, loss in enumerate(tst_main_loss)})
+    wandb.log(data={f'test-best/tst-attn-{i+1}':loss for i, loss in enumerate(tst_attn_loss)})
