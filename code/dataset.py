@@ -191,15 +191,19 @@ if __name__=='__main__':
             dirname = f'nback-{n}_{args.vocab_size}_{args.max_prob}_{args.seq_len}_{args.seed}'
             with open(f'{args.base_dir}/dataset/{dirname}/trn.txt', 'r') as f:
                 loaded_samples = f.read().split('\n')
-            trn_samples.extend(loaded_samples)
+            trn_samples.append(loaded_samples)
 
             with open(f'{args.base_dir}/dataset/{dirname}/val.txt', 'r') as f:
                 loaded_samples = f.read().split('\n')
-            val_samples.extend(loaded_samples)
+            val_samples.append(loaded_samples)
 
             with open(f'{args.base_dir}/dataset/{dirname}/tst.txt', 'r') as f:
                 loaded_samples = f.read().split('\n')
-            tst_samples.extend(loaded_samples)
+            tst_samples.append(loaded_samples)
+
+        trn_samples = list(np.array(trn_samples).T.reshape(5*10000))
+        val_samples = list(np.array(val_samples).T.reshape(5*100))
+        tst_samples = list(np.array(tst_samples).T.reshape(5*100))
 
         dirname = f'nback-all_{args.vocab_size}_{args.max_prob}_{args.seq_len}_{args.seed}'
         os.makedirs(f'{args.base_dir}/dataset/{dirname}',exist_ok=True)
@@ -220,10 +224,10 @@ if __name__=='__main__':
         num_graphs = 0
         while num_graphs < 120:
             nodes, root = generator.sample_graph(args.seq_len, rng)
-            gname = ' '.join([node.__repr__() for node in nodes])
-            if gname not in names:
+            name = ' '.join([node.__repr__() for node in nodes])
+            if name not in names:
                 roots.append(root)
-                names.append(gname)
+                names.append(name)
                 num_graphs += 1
         assert len(roots) == 120
 
@@ -232,29 +236,36 @@ if __name__=='__main__':
         val_samples = []
         tst_samples = []
         for graph_id, root in enumerate(roots[:100]):
+            # generate a sentence for calculating the template matrix
             nodes, _ = generator.sample_dfs(root, rng)
             mat = generator.convert_to_mat(nodes)
             trn_mats.append(mat)
 
-            sents = []
-            for _ in range(2000):
-                _, sent = generator.sample_dfs(root, rng)
-                sents.append(' '.join(sent))
+            # generate sentences
+            sents = [' '.join(generator.sample_dfs(root, rng)[1]) for _ in range(20000)]
             sents = list(set(sents))
-            assert len(sents) > 1200, "not enough sentences"
-            trn_samples.extend(sents[:1000])
-            val_samples.extend(sents[1000:1100])
-            tst_samples.extend(sents[1100:1200])
+            assert len(sents) > 10200, "not enough sentences"
 
+            # choose sentences for the tree-all condition (1000-10-10 split)
+            trn_samples.append(sents[:1000])
+            val_samples.append(sents[10000:10010])
+            tst_samples.append(sents[10100:10110])
+
+            # save complete trn, val and tst sets for a single graph (10000-100-100 split)
             dirname = f'tree-{graph_id}_{args.vocab_size}_{args.max_prob}_{args.seq_len}_{args.seed}'
             os.makedirs(f'{args.base_dir}/dataset/{dirname}',exist_ok=True)
             np.save(f'{args.base_dir}/dataset/{dirname}/mat.npy', mat)
             with open(f'{args.base_dir}/dataset/{dirname}/trn.txt', 'w') as f:
-                f.write('\n'.join(sents[:1000]))
+                f.write('\n'.join(sents[:10000]))
             with open(f'{args.base_dir}/dataset/{dirname}/val.txt', 'w') as f:
-                f.write('\n'.join(sents[1000:1100]))
+                f.write('\n'.join(sents[10000:10100]))
             with open(f'{args.base_dir}/dataset/{dirname}/tst.txt', 'w') as f:
-                f.write('\n'.join(sents[1100:1200]))
+                f.write('\n'.join(sents[10100:10200]))
+
+        # save complete tree-all condition (10000-1000-1000 split)
+        trn_samples = list(np.array(trn_samples).T.reshape(100*1000))
+        val_samples = list(np.array(val_samples[:10]).T.reshape(10*10))
+        tst_samples = list(np.array(tst_samples[:10]).T.reshape(10*10))
 
         dirname = f'tree-all_{args.vocab_size}_{args.max_prob}_{args.seq_len}_{args.seed}'
         os.makedirs(f'{args.base_dir}/dataset/{dirname}', exist_ok=True)
@@ -266,40 +277,42 @@ if __name__=='__main__':
         with open(f'{args.base_dir}/dataset/{dirname}/tst.txt', 'w') as f:
             f.write('\n'.join(tst_samples))
 
+        # val samples from ood graphs
         ex_val_samples = []
         ex_val_mats = []
         for graph_id, root in enumerate(roots[100:110]):
+            # generate a sentence for calculating the template matrix
             nodes, _ = generator.sample_dfs(root, rng)
             mat = generator.convert_to_mat(nodes)
             ex_val_mats.append(mat)
 
-            sents = []
-            for _ in range(200):
-                _, sent = generator.sample_dfs(root, rng)
-                sents.append(' '.join(sent))
+            # generate sentences
+            sents = [' '.join(generator.sample_dfs(root, rng)[1]) for _ in range(25)]
             sents = list(set(sents))
-            assert len(sents) > 100, "not enough sentences"
-            ex_val_samples.extend(sents[:100])
+            assert len(sents) > 10, "not enough sentences"
+            ex_val_samples.append(sents[:10])
 
+        ex_val_samples = list(np.array(ex_val_samples).T.reshape(10*10))
         np.save(f'{args.base_dir}/dataset/{dirname}/ex_val_mat.npy', np.array(ex_val_mats))
         with open(f'{args.base_dir}/dataset/{dirname}/ex_val.txt', 'w') as f:
             f.write('\n'.join(ex_val_samples))
 
+        # tst samples from ood graphs
         ex_tst_samples = []
         ex_tst_mats = []
         for graph_id, root in enumerate(roots[110:120]):
+            # generate a sentence for calculating the template matrix
             nodes, _ = generator.sample_dfs(root, rng)
             mat = generator.convert_to_mat(nodes)
             ex_tst_mats.append(mat)
 
-            sents = []
-            for _ in range(200):
-                _, sent = generator.sample_dfs(root, rng)
-                sents.append(' '.join(sent))
+            # generate sentences
+            sents = [' '.join(generator.sample_dfs(root, rng)[1]) for _ in range(25)]
             sents = list(set(sents))
-            assert len(sents) > 100, "not enough sentences"
-            ex_tst_samples.extend(sents[:100])
+            assert len(sents) > 10, "not enough sentences"
+            ex_tst_samples.append(sents[:10])
 
+        ex_tst_samples = list(np.array(ex_tst_samples).T.reshape(10*10))
         np.save(f'{args.base_dir}/dataset/{dirname}/ex_tst_mat.npy', np.array(ex_tst_mats))
         with open(f'{args.base_dir}/dataset/{dirname}/ex_tst.txt', 'w') as f:
             f.write('\n'.join(ex_tst_samples))
