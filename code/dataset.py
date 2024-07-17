@@ -230,12 +230,14 @@ if __name__=='__main__':
                 names.append(name)
                 num_graphs += 1
         assert len(roots) == 120
+        print(f"Generated {len(roots)} graphs")
 
         trn_mats = []
         trn_samples = []
         val_samples = []
         tst_samples = []
         for graph_id, root in enumerate(roots[:100]):
+            print(f"Generating sentences for {graph_id}")
             # generate a sentence for calculating the template matrix
             nodes, _ = generator.sample_dfs(root, rng)
             mat = generator.convert_to_mat(nodes)
