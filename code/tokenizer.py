@@ -12,7 +12,12 @@ def load_dataset(args):
     trn_path = f'{args.base_dir}/dataset/{dirname}/trn.txt'
     val_path = f'{args.base_dir}/dataset/{dirname}/val.txt'
     tst_path = f'{args.base_dir}/dataset/{dirname}/tst.txt'
-    return [trn_path, val_path, tst_path]
+    paths = [trn_path, val_path, tst_path]
+    if args.graph_type == "tree-all":
+        ex_val_path = f'{args.base_dir}/dataset/{dirname}/ex_val.txt'
+        ex_tst_path = f'{args.base_dir}/dataset/{dirname}/ex_tst.txt'
+        paths.extend([ex_val_path, ex_tst_path])
+    return paths
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
