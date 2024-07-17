@@ -30,8 +30,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
     print(f'running with {args}')
     args.base_dir = os.environ.get("MY_DATA_PATH")
+    print(f'running with {args}')
 
     files = load_dataset(args)
+    print(f'Usuing files {files}')
 
     if args.model_type == 'bert':
         from transformers import BertTokenizerFast
