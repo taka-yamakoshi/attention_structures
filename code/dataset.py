@@ -123,6 +123,7 @@ class Tree(object):
         stack = [root]
         nodes = []
         sent = []
+        cross_entropy = 0
         while len(stack) > 0:
             node = stack.pop(-1) # remove the last node in the stack
             node.id = len(sent) # reset the node id to the position in the sentence
@@ -133,7 +134,9 @@ class Tree(object):
                 token = rng.choice(self.vocab)
                 token_type = 'a'
             else:
-                token = rng.choice(self.vocab, p=self.transition[node.prev[0].value])
+                probs = self.transition[node.prev[0].value]
+                token = rng.choice(self.vocab, p=probs)
+                cross_entropy -= np.log(probs[token]/2)
                 if len(node.next)==0:
                     token_type = 'c'
                 else:
@@ -144,7 +147,7 @@ class Tree(object):
             # update stack
             for child in node.next:
                 stack.append(child)
-        return nodes, sent
+        return nodes, sent, cross_entropy
 
     def convert_to_mat(self, nodes: List[Node]):
         ids = np.array([int(node.__repr__()[1:]) for node in nodes])
@@ -239,7 +242,7 @@ if __name__=='__main__':
         for graph_id, root in enumerate(roots[:100]):
             print(f"Generating sentences for {graph_id}")
             # generate a sentence for calculating the template matrix
-            nodes, _ = generator.sample_dfs(root, rng)
+            nodes, _, _ = generator.sample_dfs(root, rng)
             mat = generator.convert_to_mat(nodes)
             trn_mats.append(mat)
 
@@ -282,20 +285,31 @@ if __name__=='__main__':
         # val samples from ood graphs
         ex_val_samples = []
         ex_val_mats = []
+        ex_val_ce = []
         for graph_id, root in enumerate(roots[100:110]):
             # generate a sentence for calculating the template matrix
-            nodes, _ = generator.sample_dfs(root, rng)
+            nodes, _, _ = generator.sample_dfs(root, rng)
             mat = generator.convert_to_mat(nodes)
             ex_val_mats.append(mat)
 
             # generate sentences
-            sents = [' '.join(generator.sample_dfs(root, rng)[1]) for _ in range(25)]
-            sents = list(set(sents))
+            sents = []
+            ce = []
+            for _ in range(25):
+                _, sent, cross_entropy = generator.sample_dfs(root, rng)
+                sent = ' '.join(sent)
+                if sent not in sents:
+                    sents.append(sent)
+                    ce.append(cross_entropy)
+            #sents = list(set(sents))
             assert len(sents) > 10, "not enough sentences"
             ex_val_samples.append(sents[:10])
+            ex_val_ce.append(ce[:10])
 
         ex_val_samples = list(np.array(ex_val_samples).T.reshape(10*10))
+        ex_val_ce = list(np.array(ex_val_ce).T.reshape(10*10))
         np.save(f'{args.base_dir}/dataset/{dirname}/ex_val_mat.npy', np.array(ex_val_mats))
+        np.save(f'{args.base_dir}/dataset/{dirname}/ex_val_ce.npy', np.array(ex_val_ce))
         with open(f'{args.base_dir}/dataset/{dirname}/ex_val.txt', 'w') as f:
             f.write('\n'.join(ex_val_samples))
 
@@ -304,7 +318,7 @@ if __name__=='__main__':
         ex_tst_mats = []
         for graph_id, root in enumerate(roots[110:120]):
             # generate a sentence for calculating the template matrix
-            nodes, _ = generator.sample_dfs(root, rng)
+            nodes, _, _ = generator.sample_dfs(root, rng)
             mat = generator.convert_to_mat(nodes)
             ex_tst_mats.append(mat)
 
