@@ -132,15 +132,25 @@ class Tree(object):
             # sample token
             if len(node.prev)==0:
                 token = rng.choice(self.vocab)
+                cross_entropy -= np.log(1/self.vocab_size)
                 token_type = 'a'
             else:
                 probs = self.transition[node.prev[0].value]
                 token = rng.choice(self.vocab, p=probs)
-                cross_entropy -= np.log(probs[token]/2)
-                if len(node.next)==0:
-                    token_type = 'c'
+
+                if node.prev[0].type in ['b','c']:
+                    # if the preceding token is b or c, then the following token is always a
+                    cross_entropy -= np.log(probs[token])
+                elif len(node.prev[0].prev)>0:
+                    if node.prev[0].prev[0].type in ['b','c']:
+                        # if the "preceding preceding" token is b or c, then the following token is always a
+                        cross_entropy -= np.log(probs[token])
                 else:
-                    token_type = node.type
+                    cross_entropy -= np.log(probs[token]/2)
+
+                if len(node.next)==0:
+                    node.type = 'c'
+                token_type = node.type
             node.value = token
             sent.append(token_type+str(token))
 
