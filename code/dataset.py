@@ -119,7 +119,7 @@ class Tree(object):
                 num_tokens += 1
         return nodes, root
 
-    def sample_dfs(self, root: Node, rng: np.random.Generator):
+    def sample_dfs(self, root: Node, seq_len:int, rng: np.random.Generator):
         stack = [root]
         nodes = []
         sent = []
@@ -137,16 +137,26 @@ class Tree(object):
             else:
                 probs = self.transition[node.prev[0].value]
                 token = rng.choice(self.vocab, p=probs)
+                if len(node.next)==0:
+                    node.type = 'c'
+                token_type = node.type
 
                 if node.prev[0].type in ['b','c']:
                     # if the preceding token is b or c, then the following token is always a
                     cross_entropy -= np.log(probs[token])
-                else:
+                elif len(node.prev[0].prev)>0:
+                    if node.prev[0].prev[0].type in ['b','c']:
+                        # if the token second before is b or c, then the following token is either a or c
+                        cross_entropy -= np.log(probs[token]/2)
+                elif len(nodes) > seq_len-5:
+                    # if the remaining tokens are less than 5, then the following token is either a or c
                     cross_entropy -= np.log(probs[token]/2)
+                else:
+                    if node.type=='b':
+                        cross_entropy -= np.log(probs[token]*0.3)
+                    else:
+                        cross_entropy -= np.log(probs[token]*0.7/2)
 
-                if len(node.next)==0:
-                    node.type = 'c'
-                token_type = node.type
             node.value = token
             sent.append(token_type+str(token))
 
@@ -248,12 +258,12 @@ if __name__=='__main__':
         for graph_id, root in enumerate(roots[:100]):
             print(f"Generating sentences for {graph_id}")
             # generate a sentence for calculating the template matrix
-            nodes, _, _ = generator.sample_dfs(root, rng)
+            nodes, _, _ = generator.sample_dfs(root, args.seq_len, rng)
             mat = generator.convert_to_mat(nodes)
             trn_mats.append(mat)
 
             # generate sentences
-            sents = [' '.join(generator.sample_dfs(root, rng)[1]) for _ in range(20000)]
+            sents = [' '.join(generator.sample_dfs(root, args.seq_len, rng)[1]) for _ in range(20000)]
             sents = list(set(sents))
             assert len(sents) > 10200, "not enough sentences"
 
@@ -294,7 +304,7 @@ if __name__=='__main__':
         ex_val_ce = []
         for graph_id, root in enumerate(roots[100:110]):
             # generate a sentence for calculating the template matrix
-            nodes, _, _ = generator.sample_dfs(root, rng)
+            nodes, _, _ = generator.sample_dfs(root, args.seq_len, rng)
             mat = generator.convert_to_mat(nodes)
             ex_val_mats.append(mat)
 
@@ -302,7 +312,7 @@ if __name__=='__main__':
             sents = []
             ce = []
             for _ in range(25):
-                _, sent, cross_entropy = generator.sample_dfs(root, rng)
+                _, sent, cross_entropy = generator.sample_dfs(root, args.seq_len, rng)
                 sent = ' '.join(sent)
                 if sent not in sents:
                     sents.append(sent)
@@ -324,12 +334,12 @@ if __name__=='__main__':
         ex_tst_mats = []
         for graph_id, root in enumerate(roots[110:120]):
             # generate a sentence for calculating the template matrix
-            nodes, _, _ = generator.sample_dfs(root, rng)
+            nodes, _, _ = generator.sample_dfs(root, args.seq_len, rng)
             mat = generator.convert_to_mat(nodes)
             ex_tst_mats.append(mat)
 
             # generate sentences
-            sents = [' '.join(generator.sample_dfs(root, rng)[1]) for _ in range(25)]
+            sents = [' '.join(generator.sample_dfs(root, args.seq_len, rng)[1]) for _ in range(25)]
             sents = list(set(sents))
             assert len(sents) > 10, "not enough sentences"
             ex_tst_samples.append(sents[:10])
