@@ -143,20 +143,19 @@ class Tree(object):
 
                 if node.prev[0].type in ['b','c']:
                     # if the preceding token is b or c, then the following token is always a
-                    cross_entropy -= np.log(probs[token])
+                    neg_log_prob = -np.log(probs[token])
                 elif len(node.prev[0].prev)>0:
                     if node.prev[0].prev[0].type in ['b','c']:
                         # if the token second before is b or c, then the following token is either a or c
-                        cross_entropy -= np.log(probs[token]/2)
+                        neg_log_prob = -np.log(probs[token]*0.5)
+                    else:
+                        neg_log_prob = -np.log(probs[token]*0.3) if node.type=='b' else -np.log(probs[token]*0.35)
                 elif len(nodes) > seq_len-5:
                     # if the remaining tokens are less than 5, then the following token is either a or c
-                    cross_entropy -= np.log(probs[token]/2)
+                    neg_log_prob = -np.log(probs[token]*0.5)
                 else:
-                    if node.type=='b':
-                        cross_entropy -= np.log(probs[token]*0.3)
-                    else:
-                        cross_entropy -= np.log(probs[token]*0.7/2)
-
+                    neg_log_prob = -np.log(probs[token]*0.3) if node.type=='b' else -np.log(probs[token]*0.35)
+                cross_entropy += neg_log_prob
             node.value = token
             sent.append(token_type+str(token))
 
