@@ -141,10 +141,6 @@ class Tree(object):
                 if node.prev[0].type in ['b','c']:
                     # if the preceding token is b or c, then the following token is always a
                     cross_entropy -= np.log(probs[token])
-                elif len(node.prev[0].prev)>0:
-                    if node.prev[0].prev[0].type in ['b','c']:
-                        # if the "preceding preceding" token is b or c, then the following token is always a
-                        cross_entropy -= np.log(probs[token])
                 else:
                     cross_entropy -= np.log(probs[token]/2)
 
