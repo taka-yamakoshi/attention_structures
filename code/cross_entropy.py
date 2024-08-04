@@ -23,14 +23,14 @@ if __name__=='__main__':
     roots = []
     names = []
     num_graphs = 0
-    while num_graphs < 100:
+    while num_graphs < 1000:
         nodes, root = generator.sample_graph(args.seq_len, rng)
         name = ' '.join([node.__repr__() for node in nodes])
         if name not in names:
             roots.append(root)
             names.append(name)
             num_graphs += 1
-    assert len(roots) == 100
+    assert len(roots) == 1000
     print(f"Generated {len(roots)} graphs")
 
     dirname = f'tree-all_{args.vocab_size}_{args.max_prob}_{args.seq_len}_{args.seed}'
