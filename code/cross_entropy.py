@@ -36,8 +36,8 @@ if __name__=='__main__':
     dirname = f'tree-all_{args.vocab_size}_{args.max_prob}_{args.seq_len}_{args.seed}'
     os.makedirs(f'{args.base_dir}/cross_entropy/{dirname}', exist_ok=True)
     for term_prob in np.linspace(0.05,0.95,19):
-        print(f'Running {term_prob:.1g}')
+        print(f'Running {term_prob:.2g}')
         cross_entropy = np.empty((1000,100))
         for graph_id, root in enumerate(roots):
             cross_entropy[graph_id] = [generator.calc_cross_entropy(root, args.seq_len, rng, term_prob) for _ in range(100)]
-        np.save(f'{args.base_dir}/cross_entropy/{dirname}/term_prob_{term_prob:.1g}.npy', cross_entropy)
+        np.save(f'{args.base_dir}/cross_entropy/{dirname}/term_prob_{term_prob:.2g}.npy', cross_entropy)
