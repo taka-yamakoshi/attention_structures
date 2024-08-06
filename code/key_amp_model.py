@@ -4,7 +4,7 @@ import argparse
 import os
 import copy
 
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, LlamaConfig
 from transformers.modeling_utils import PreTrainedModel
 from transformers.configuration_utils import PretrainedConfig
 
@@ -16,35 +16,35 @@ sys.path.append('../../pyvene')
 import pyvene as pv
 
 class KeyAmpConfig(PretrainedConfig):
-    model_type = 'key_amp'
+    model_type = 'llama'
     is_composition = True
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        assert 'config' in kwargs and 'alpha' in kwargs
-        self.main_model = kwargs.pop('config')
         self.alpha = kwargs.pop('alpha')
+        super().__init__(**kwargs)
     def to_dict(self):
-        output = copy.deepcopy(self.__dict__)
-        output['main_model'] = self.main_model.to_dict()
-        output["model_type"] = self.__class__.model_type
+        output = super().to_dict()
+        output['alpha'] = self.alpha
         return output
 
 class KeyAmpModel(PreTrainedModel):
+    config_class = KeyAmpConfig
     def __init__(self, config: PretrainedConfig):
         super().__init__(config)
-        self.main_config = config.main_model
-        self.alpha = config.alpha
-        self.main_model = AutoModelForCausalLM.from_config(self.main_config)
+        self.config = config
+        config_kwargs = config.to_dict()
+        self.alpha = config_kwargs.pop('alpha')
+        main_config = LlamaConfig(**config_kwargs)
+        main_model = AutoModelForCausalLM.from_config(main_config)
         self.pv_model = pv.IntervenableModel(
             {"component": "model.layers[1].self_attn.k_proj.output",
             "intervention": self.interv_fn},
-             model=self.main_model)
+             model=main_model)
         self.pv_model.enable_model_gradients()
     def interv_fn(self,base,sources):
         mask = (self.input_ids>=23)*self.alpha + (self.input_ids<23)
         return mask.unsqueeze(-1)*base
     def resize_token_embeddings(self, size):
-        self.main_model.resize_token_embeddings(size)
+        self.pv_model.model.resize_token_embeddings(size)
     def forward(
         self,
         examples,
@@ -136,7 +136,8 @@ if __name__=='__main__':
 
     # Load the model
     config = load_config(args.model_type,args)
-    config = KeyAmpConfig(config=config,alpha=args.alpha)
+    config.alpha = args.alpha
+    config = KeyAmpConfig(**(config.to_dict()))
     model = KeyAmpModel(config)
     model.resize_token_embeddings(len(args.tokenizer))
     model.to(args.device)
