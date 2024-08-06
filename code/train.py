@@ -87,6 +87,45 @@ def load_sentences(args):
     tokenized_dataset['trn'] = tokenized_dataset['trn'].filter(lambda example, idx: idx < args.datasize, with_indices=True)
     return tokenized_dataset
 
+def get_data_loaders(args):
+    # Load the dataset and the data collator
+    dataset = load_sentences(args)
+    data_collator = DataCollatorForLanguageModeling(tokenizer=args.tokenizer,mlm=False)
+
+    # Create the dataloaders
+    val_loaders = []
+    tst_loaders = []
+    if args.graph_type.startswith('nback'):
+        # Create separate dataloaders for all n's
+        for n in range(1,6):
+            args.dataset_name = f'nback-{n}_{args.vocab_size}_{args.max_prob}_{args.seq_len}_{args.seed}'
+            eval_dataset = load_sentences(args)
+            val_loader = torch.utils.data.DataLoader(eval_dataset['val'], batch_size=args.batchsize_val,
+                                                     collate_fn=data_collator)
+            tst_loader = torch.utils.data.DataLoader(eval_dataset['tst'], batch_size=args.batchsize_val,
+                                                     collate_fn=data_collator)
+            val_loaders.append(val_loader)
+            tst_loaders.append(tst_loader)
+        args.dataset_name = gen_dataset_name(args)
+
+    elif args.graph_type.startswith('tree'):
+        # Create separate dataloaders for all trees
+        val_loader = torch.utils.data.DataLoader(dataset['val'], batch_size=args.batchsize_val,
+                                                 collate_fn=data_collator)
+        tst_loader = torch.utils.data.DataLoader(dataset['tst'], batch_size=args.batchsize_val,
+                                                 collate_fn=data_collator)
+        val_loaders.append(val_loader)
+        tst_loaders.append(tst_loader)
+        if args.graph_type=='tree-all':
+            ex_val_loader = torch.utils.data.DataLoader(dataset['ex_val'], batch_size=args.batchsize_val,
+                                                        collate_fn=data_collator)
+            ex_tst_loader = torch.utils.data.DataLoader(dataset['ex_tst'], batch_size=args.batchsize_val,
+                                                        collate_fn=data_collator)
+            val_loaders.append(ex_val_loader)
+            tst_loaders.append(ex_tst_loader)
+
+    return dataset, data_collator, val_loaders, tst_loaders
+
 def gen_scheduler(optimizer, args):
     num_steps = args.num_epochs*math.ceil(args.datasize/args.batchsize_trn)
     if args.scheduler_type=='linear':
@@ -239,41 +278,7 @@ if __name__=='__main__':
     if args.model_type in ['gpt2','llama2']:
         args.tokenizer.pad_token = args.tokenizer.eos_token
 
-    # Load the dataset and the data collator
-    dataset = load_sentences(args)
-    data_collator = DataCollatorForLanguageModeling(tokenizer=args.tokenizer,mlm=False)
-
-    # Create the dataloaders
-    val_loaders = []
-    tst_loaders = []
-    if args.graph_type.startswith('nback'):
-        # Create separate dataloaders for all n's
-        for n in range(1,6):
-            args.dataset_name = f'nback-{n}_{args.vocab_size}_{args.max_prob}_{args.seq_len}_{args.seed}'
-            eval_dataset = load_sentences(args)
-            val_loader = torch.utils.data.DataLoader(eval_dataset['val'], batch_size=args.batchsize_val,
-                                                     collate_fn=data_collator)
-            tst_loader = torch.utils.data.DataLoader(eval_dataset['tst'], batch_size=args.batchsize_val,
-                                                     collate_fn=data_collator)
-            val_loaders.append(val_loader)
-            tst_loaders.append(tst_loader)
-        args.dataset_name = gen_dataset_name(args)
-
-    elif args.graph_type.startswith('tree'):
-        # Create separate dataloaders for all trees
-        val_loader = torch.utils.data.DataLoader(dataset['val'], batch_size=args.batchsize_val,
-                                                 collate_fn=data_collator)
-        tst_loader = torch.utils.data.DataLoader(dataset['tst'], batch_size=args.batchsize_val,
-                                                 collate_fn=data_collator)
-        val_loaders.append(val_loader)
-        tst_loaders.append(tst_loader)
-        if args.graph_type=='tree-all':
-            ex_val_loader = torch.utils.data.DataLoader(dataset['ex_val'], batch_size=args.batchsize_val,
-                                                        collate_fn=data_collator)
-            ex_tst_loader = torch.utils.data.DataLoader(dataset['ex_tst'], batch_size=args.batchsize_val,
-                                                        collate_fn=data_collator)
-            val_loaders.append(ex_val_loader)
-            tst_loaders.append(ex_tst_loader)
+    dataset, data_collator, val_loaders, tst_loaders = get_data_loaders(args)
 
     # Load the model
     config = load_config(args.model_type,args)
