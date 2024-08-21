@@ -119,7 +119,7 @@ if __name__=='__main__':
     # Initialize weights and biases with args
     import wandb
     wandb.require("core")
-    wandb.init(project="attn_struct_key_amp")
+    wandb.init(project="attn_struct_key_amp_surprisal")
     wandb.config.update(args.__dict__)
 
     # Set the storage path
@@ -155,6 +155,7 @@ if __name__=='__main__':
     # Load the model
     config = load_config(args.model_type,args)
     config.alpha = args.alpha
+    config.layer_id = args.layer_id
     config = KeyAmpConfig(**(config.to_dict()))
     model = KeyAmpModel(config)
     model.resize_token_embeddings(len(args.tokenizer))
