@@ -20,10 +20,12 @@ class KeyAmpConfig(PretrainedConfig):
     is_composition = True
     def __init__(self, **kwargs):
         self.alpha = kwargs.pop('alpha')
+        self.layer_id = kwargs.pop('layer_id')
         super().__init__(**kwargs)
     def to_dict(self):
         output = super().to_dict()
         output['alpha'] = self.alpha
+        output['layer_id'] = self.layer_id
         return output
 
 class KeyAmpModel(PreTrainedModel):
@@ -33,17 +35,29 @@ class KeyAmpModel(PreTrainedModel):
         self.config = config
         config_kwargs = config.to_dict()
         self.alpha = config_kwargs.pop('alpha')
+        self.layer_id = config_kwargs.pop('layer_id')
         main_config = LlamaConfig(**config_kwargs)
         main_model = AutoModelForCausalLM.from_config(main_config)
         self.pv_model = pv.IntervenableModel(
-            {"component": "model.layers[1].self_attn.k_proj.output",
+            {"component": f"model.layers[{self.layer_id}].self_attn.k_proj.output",
             "intervention": self.interv_fn},
              model=main_model)
         self.pv_model.enable_model_gradients()
     def interv_fn(self,base,sources):
-        mask = (self.input_ids>=23)*self.alpha + (self.input_ids<23)
+        #mask = (self.input_ids>=23)*self.alpha + (self.input_ids<23)
+        mask = self.alpha*self.surprisal
         return mask.unsqueeze(-1)*base
-    def resize_token_embeddings(self, size):
+    def calc_surprisal(self, logits:torch.Tensor, labels:torch.Tensor):
+        shift_logits = logits[..., :-1, :].contiguous()
+        shift_labels = labels[..., 1:].contiguous()
+        shift_labels = shift_labels.to(shift_logits.device)
+
+        loss_fct = torch.nn.CrossEntropyLoss(reduction='none')
+        surprisal = (1/self.alpha)*torch.ones(labels.shape).float()
+        for bid, (batch_logits, batch_labels) in enumerate(zip(shift_logits, shift_labels)):
+            surprisal[bid][1:] = loss_fct(batch_logits, batch_labels)
+        return surprisal
+    def resize_token_embeddings(self, size:int):
         self.pv_model.model.resize_token_embeddings(size)
     def forward(
         self,
@@ -52,6 +66,9 @@ class KeyAmpModel(PreTrainedModel):
         ):
         examples.update(kwargs)
         self.input_ids = examples['input_ids']
+        with torch.no_grad():
+            outputs = self.pv_model.model(**examples)
+        self.surprisal = self.calc_surprisal(outputs.logits, examples['labels'])
         orgnl_outputs, interv_outputs = self.pv_model(base=examples,
                                                       output_original_output=True)
         return orgnl_outputs, interv_outputs
@@ -86,6 +103,7 @@ if __name__=='__main__':
     parser.add_argument('--datasize', type = int, default = 1000)
     
     parser.add_argument('--alpha', type = float, default = 1.0)
+    parser.add_argument('--layer_id', type = int, default = 0)
 
     parser.add_argument('--batchsize_trn', type = int, default = 10)
     parser.add_argument('--batchsize_val', type = int, default = 100)

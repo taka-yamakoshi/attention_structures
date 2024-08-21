@@ -20,5 +20,5 @@ def gen_run_name(args):
 
 def gen_run_name_key_amp(args):
     model_stat = f'{args.num_layers}_{args.num_heads}_{args.hidden_size}_{args.intermediate_size}'
-    run_stat = f'key_amp_{args.alpha}_{args.datasize}_{args.batchsize_trn}_{args.batchsize_val}_{args.lr}_{args.scheduler_type}_{args.num_epochs}_{args.run_seed}'
+    run_stat = f'key_amp_{args.layer_id}_{args.alpha}_{args.datasize}_{args.batchsize_trn}_{args.batchsize_val}_{args.lr}_{args.scheduler_type}_{args.num_epochs}_{args.run_seed}'
     return f'{args.model_type}_{gen_dataset_name(args)}_{model_stat}_{run_stat}'
