@@ -53,7 +53,7 @@ class KeyAmpModel(PreTrainedModel):
         shift_labels = shift_labels.to(shift_logits.device)
 
         loss_fct = torch.nn.CrossEntropyLoss(reduction='none')
-        surprisal = (1/self.alpha)*torch.ones(labels.shape).float()
+        surprisal = (1/self.alpha)*torch.ones(labels.shape).float().to(shift_logits.device)
         for bid, (batch_logits, batch_labels) in enumerate(zip(shift_logits, shift_labels)):
             surprisal[bid][1:] = loss_fct(batch_logits, batch_labels)
         return surprisal
