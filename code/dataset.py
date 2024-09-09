@@ -279,14 +279,14 @@ if __name__=='__main__':
         roots = []
         names = []
         num_graphs = 0
-        while num_graphs < 120:
+        while num_graphs < 1120:
             nodes, root = generator.sample_graph(args.seq_len, rng)
             name = ' '.join([node.__repr__() for node in nodes])
             if name not in names:
                 roots.append(root)
                 names.append(name)
                 num_graphs += 1
-        assert len(roots) == 120
+        assert len(roots) == 1120
         print(f"Generated {len(roots)} graphs")
 
         trn_mats = []
@@ -375,3 +375,23 @@ if __name__=='__main__':
         np.save(f'{args.base_dir}/dataset/{dirname}/ex_tst_mat.npy', np.array(ex_tst_mats))
         with open(f'{args.base_dir}/dataset/{dirname}/ex_tst.txt', 'w') as f:
             f.write('\n'.join(ex_tst_samples))
+
+        # ood graphs for non-parametric estimation of attention disribution
+        temp_samples = []
+        temp_mats = []
+        for graph_id, root in enumerate(roots[120:]):
+            # generate a sentence for calculating the template matrix
+            nodes, _ = generator.sample_dfs(root, rng)
+            mat = generator.convert_to_mat(nodes)
+            temp_mats.append(mat)
+
+            # generate sentences
+            sents = [' '.join(generator.sample_dfs(root, rng)[1]) for _ in range(25)]
+            sents = list(set(sents))
+            assert len(sents) > 10, "not enough sentences"
+            temp_samples.append(sents[:10])
+
+        temp_samples = list(np.array(temp_samples).T.reshape(1000*10))
+        np.save(f'{args.base_dir}/dataset/{dirname}/templates_mat.npy', np.array(temp_mats))
+        with open(f'{args.base_dir}/dataset/{dirname}/templates.txt', 'w') as f:
+            f.write('\n'.join(temp_samples))
