@@ -7,7 +7,7 @@ import math
 from transformers import AutoTokenizer, AutoModelForCausalLM, DataCollatorForLanguageModeling
 from datasets import load_dataset
 
-import ot
+#import ot
 
 from utils import gen_dataset_name, gen_run_name, seed_everything
 
