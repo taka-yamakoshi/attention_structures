@@ -240,6 +240,7 @@ if __name__=='__main__':
     parser.add_argument('--scheduler_type', type = str, default = 'constant')
     parser.add_argument('--num_epochs', type = int, default = 5)
     parser.add_argument('--run_seed', type = int, default = 1234)
+    parser.add_argument('--wandb_name', type = str, default = 'attn_struct')
 
     parser.add_argument('--core_id', type = int, default = 0)
     args = parser.parse_args()
@@ -248,7 +249,7 @@ if __name__=='__main__':
     # Initialize weights and biases with args
     import wandb
     wandb.require("core")
-    wandb.init(project="attn_struct_tree_first_pass")
+    wandb.init(project=args.wandb_name)
     wandb.config.update(args.__dict__)
 
     # Set the storage path
