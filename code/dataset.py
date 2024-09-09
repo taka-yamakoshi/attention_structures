@@ -3,7 +3,7 @@ import string
 from typing import List
 import os
 import argparse
-import networkx as nx
+#import networkx as nx
 
 class Node(object):
     def __init__(self, node_id, node_type):
