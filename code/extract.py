@@ -77,10 +77,11 @@ if __name__=='__main__':
     num_sents = 0
     for examples in data_loader:
         loaded_examples = examples.to(args.device)
-        outputs = model(input_ids=loaded_examples['input_ids'],
-                        labels=loaded_examples['labels'],
-                        attention_mask=loaded_examples['attention_mask'],
-                        output_attentions=True)
+        with torch.no_grad():
+            outputs = model(input_ids=loaded_examples['input_ids'],
+                            labels=loaded_examples['labels'],
+                            attention_mask=loaded_examples['attention_mask'],
+                            output_attentions=True)
         batch_size = len(loaded_examples['input_ids'])
         for layer_id in range(args.num_layers):
             attns[num_sents:num_sents+batch_size,layer_id,:,:,:] = outputs.attentions[layer_id]
