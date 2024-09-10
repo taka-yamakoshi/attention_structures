@@ -73,7 +73,7 @@ if __name__=='__main__':
     model.eval()
 
     assert args.model_type in ['gpt2','llama2'] and args.graph_type=='tree-all'
-    attns = torch.zeros((len(dataset),args.num_layers,args.num_heads,args.seq_len+1,args.seq_len+1))
+    attns = torch.zeros((len(dataset["temps"]),args.num_layers,args.num_heads,args.seq_len+1,args.seq_len+1))
     num_sents = 0
     for examples in data_loader:
         loaded_examples = examples.to(args.device)
