@@ -201,13 +201,11 @@ def calc_wasserstein_distance(attns:torch.Tensor, temps:torch.Tensor):
 def calc_faiss_index(args):
     import faiss
     from copy import deepcopy
-    bias = deepcopy(args.bias)
-    run_name = deepcopy(args.run_name)
-    args.bias = "nobias"
+    bias, beta, run_name = deepcopy(args.bias), deepcopy(args.beta), deepcopy(args.run_name)
+    args.bias, args.beta = "nobias", 0.0
     args.run_name = gen_run_name(args)
     attns_path = f'{args.base_dir}/attns/{args.run_name}/attns.npy'
-    args.bias = bias
-    args.run_name = run_name
+    args.bias, args.beta, args.run_name = bias, beta, run_name
     attns = np.load(attns_path)
     # attns.shape = (batch_size, nlayers, nheads, seqlen, seqlen)
     assert len(attns.shape)==5
