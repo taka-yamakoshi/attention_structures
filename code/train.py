@@ -204,6 +204,7 @@ def calc_faiss_index(args):
     from copy import deepcopy
     datasize, num_epochs = deepcopy(args.datasize), deepcopy(args.num_epochs)
     bias, beta, run_name = deepcopy(args.bias), deepcopy(args.beta), deepcopy(args.run_name)
+    args.datasize, args.num_epochs = 10000, 10
     args.bias, args.beta = "nobias", 0.0
     args.run_name = gen_run_name(args)
     attns_path = f'{args.base_dir}/attns/{args.run_name}/attns.npy'
