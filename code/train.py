@@ -166,12 +166,12 @@ def evaluate(model, loaders, args):
                     else:
                         templates = get_templates(args, seq_len, batch_size, num_heads)
                         layer_ids = np.arange(args.num_layers) if args.bias.split('-')[2]=='all' else [int(args.bias.split('-')[2])]
-                    attn_loss = calc_attn_loss(outputs.attentions, templates, layer_ids)
+                    attn_loss = calc_attn_loss_nback(outputs.attentions, templates, layer_ids)
                 elif args.graph_type.startswith('tree'):
                     if args.bias=='nobias':
                         attn_loss = torch.tensor([0]).to(args.device)
                     else:
-                        raise NotImplementedError
+                        attn_loss = calc_attn_loss_faiss(args, index_list, xb_list, outputs.attentions, layer_ids)
                 main_loss_list.append(outputs.loss.item())
                 attn_loss_list.append(attn_loss.item())
             main_out.append(np.mean(main_loss_list))
@@ -198,11 +198,61 @@ def calc_wasserstein_distance(attns:torch.Tensor, temps:torch.Tensor):
     device = u_weights.device
     return ot.wasserstein_1d(u_values.to(device), v_values.to(device), u_weights, v_weights)
 
+def calc_faiss_index(args):
+    import faiss
+    attns_path = f'{args.base_dir}/attns/{args.run_name}/attns.npy'
+    attns = np.load(attns_path)
+    # attns.shape = (batch_size, nlayers, nheads, seqlen, seqlen)
+    assert len(attns.shape)==5
+    index_list = []
+    xb_list = []
+    for layer_id in range(args.num_layers):
+        xb = attns[:,layer_id,:,:,:]
+        xb = xb.reshape((xb.shape[0]*xb.shape[1],xb.shape[2]*xb.shape[3]))
+        rand_ids = args.rng.permutation(xb.shape[0])
+        xb = xb[rand_ids]
+        xb = xb.astype('float32')
+        _, d = xb.shape
+
+        faiss_index = faiss.index_factory(d, "PCA256,HNSW32,Flat")
+        faiss_index.train(xb)
+        faiss_index.add(xb)
+        index_list.append(faiss_index)
+        xb_list.append(xb)
+    return index_list, xb_list
+
+def calc_attn_loss_faiss(args, index_list, xb_list, attns, layer_ids):
+    # attns.shape = (nlayers, batchsize, nheads, seqlen, seqlen)
+    attn_loss = 0
+    for layer_id in layer_ids:
+        attn = attns[layer_id]
+        faiss_index = index_list[layer_id]
+        xb = xb_list[layer_id]
+        assert len(attn.shape)==4
+        xq = attn.clone().detach().cpu().numpy().astype('float32')
+        xq = xq.reshape((xq.shape[0]*xq.shape[1],xq.shape[2]*xq.shape[3]))
+        _, I = faiss_index.search(xq, args.num_neighbors)
+
+        # xn.shape = (batchsize*nheads, neighbors, seqlen*seqlen)
+        xn = torch.tensor(np.array([[xb[sample_id] for sample_id in line] for line in I]))
+        assert len(xn.shape)==3 and xn.shape[1]==args.num_neighbors
+
+        # attn.shape = (batchsize*nheads, seqlen*seqlen)
+        attn = attn.view(attn.shape[0]*attn.shape[1],attn.shape[2]*attn.shape[3])
+        assert attn.shape[0]==xn.shape[0] and attn.shape[1]==xn.shape[2]
+
+        # dist.shape = (batchsize*nheads, neighbors)
+        dist = torch.sqrt(((attn.unsqueeze(1)-xn)**2).sum(dim=-1))
+
+        min_dist = -torch.logsumexp(-dist, dim=1)
+        attn_loss += torch.mean(min_dist)
+    return attn_loss
+
 def get_templates(args, seq_len, batch_size, num_heads):
     ns = [1,2,3,4,5] if args.bias.startswith('nback-all') else [int(args.bias.split('-')[1])]
     return torch.stack([get_template_nback(n,seq_len,batch_size,num_heads).to(args.device) for n in ns])
 
-def calc_attn_loss(attentions, temps, layer_ids):
+def calc_attn_loss_nback(attentions, temps, layer_ids):
     attn_loss = 0
     for layer_id, attn_layer in enumerate(attentions):
         if layer_id in layer_ids:
@@ -233,6 +283,7 @@ if __name__=='__main__':
     parser.add_argument('--datasize', type = int, default = 1000)
     parser.add_argument('--bias', type = str, default = 'nobias')
     parser.add_argument('--beta', type = float, default = 0.1)
+    parser.add_argument('--num_neighbors', type = int)
 
     parser.add_argument('--batchsize_trn', type = int, default = 10)
     parser.add_argument('--batchsize_val', type = int, default = 100)
@@ -268,6 +319,7 @@ if __name__=='__main__':
 
     # Fix the seed
     seed_everything(args.run_seed)
+    args.rng = np.random.default_rng(args.run_seed)
 
     # Load the tokenizer
     if args.graph_type.startswith('nback'):
@@ -286,6 +338,10 @@ if __name__=='__main__':
     model = AutoModelForCausalLM.from_config(config)
     model.resize_token_embeddings(len(args.tokenizer))
     model.to(args.device)
+
+    # Train the faiss index
+    if args.graph_type.startswith('tree'):
+        index_list, xb_list = calc_faiss_index(args)
 
     # Create the optimizer and the scheduler
     optimizer = torch.optim.AdamW(model.parameters(),lr=args.lr)
@@ -316,9 +372,13 @@ if __name__=='__main__':
             if args.bias=='nobias':
                 attn_loss = torch.tensor([0]).to(args.device)
             else:
-                templates = get_templates(args, seq_len, batch_size, num_heads)
                 layer_ids = np.arange(args.num_layers) if args.bias.split('-')[2]=='all' else [int(args.bias.split('-')[2])]
-                attn_loss = calc_attn_loss(outputs.attentions, templates, layer_ids)
+                if args.graph_type.startswith('nback'):
+                    templates = get_templates(args, seq_len, batch_size, num_heads)
+                    attn_loss = calc_attn_loss_nback(outputs.attentions, templates, layer_ids)
+                elif args.graph_type.startswith('tree'):
+                    attn_loss = calc_attn_loss_faiss(args, index_list, xb_list, outputs.attentions, layer_ids)
+
             main_loss = outputs.loss
             loss = main_loss + args.beta*attn_loss
             loss.backward()
