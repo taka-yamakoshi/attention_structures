@@ -171,6 +171,7 @@ def evaluate(model, loaders, args):
                     if args.bias=='nobias':
                         attn_loss = torch.tensor([0]).to(args.device)
                     else:
+                        layer_ids = np.arange(args.num_layers) if args.bias.split('-')[2]=='all' else [int(args.bias.split('-')[2])]
                         attn_loss = calc_attn_loss_faiss(args, index_list, xb_list, outputs.attentions, layer_ids)
                 main_loss_list.append(outputs.loss.item())
                 attn_loss_list.append(attn_loss.item())
