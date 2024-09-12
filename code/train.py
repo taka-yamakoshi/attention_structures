@@ -202,10 +202,12 @@ def calc_wasserstein_distance(attns:torch.Tensor, temps:torch.Tensor):
 def calc_faiss_index(args):
     import faiss
     from copy import deepcopy
+    datasize, num_epochs = deepcopy(args.datasize), deepcopy(args.num_epochs)
     bias, beta, run_name = deepcopy(args.bias), deepcopy(args.beta), deepcopy(args.run_name)
     args.bias, args.beta = "nobias", 0.0
     args.run_name = gen_run_name(args)
     attns_path = f'{args.base_dir}/attns/{args.run_name}/attns.npy'
+    args.datasize, args.num_epochs = datasize, num_epochs
     args.bias, args.beta, args.run_name = bias, beta, run_name
     attns = np.load(attns_path)
     # attns.shape = (batch_size, nlayers, nheads, seqlen, seqlen)
@@ -289,7 +291,7 @@ if __name__=='__main__':
     parser.add_argument('--datasize', type = int, default = 1000)
     parser.add_argument('--bias', type = str, default = 'nobias')
     parser.add_argument('--beta', type = float, default = 0.1)
-    parser.add_argument('--num_neighbors', type = int)
+    parser.add_argument('--num_neighbors', type = int, default = 100)
 
     parser.add_argument('--batchsize_trn', type = int, default = 10)
     parser.add_argument('--batchsize_val', type = int, default = 100)
