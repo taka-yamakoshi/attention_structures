@@ -4,21 +4,29 @@ import argparse
 import os
 
 from transformers import AutoTokenizer, AutoModelForCausalLM, DataCollatorForLanguageModeling
+from datasets import load_dataset
 
 from utils import gen_dataset_name, gen_run_name, seed_everything
 from train import load_sentences
 
-def get_tree_template_loaders(args):
+def get_template_loaders(args):
     # Load the dataset and the data collator
     dataset = load_sentences(args)
     data_collator = DataCollatorForLanguageModeling(tokenizer=args.tokenizer,mlm=False)
-    data_loader = torch.utils.data.DataLoader(dataset['temps'], batch_size=args.batchsize_val,collate_fn=data_collator)
+    if args.graph_type.startswith('tree'):
+        subset = 'temps'
+    else:
+        subset = 'val'
+    data_loader = torch.utils.data.DataLoader(dataset[subset], batch_size=args.batchsize_val,collate_fn=data_collator)
     return dataset, data_loader
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--pretrained_model_name', type = str, default=None)
+    parser.add_argument('--max_length', type = int, default=None)
+    parser.add_argument('--dataset_name', type = str, default=None)
     parser.add_argument('--model_type', type = str, required = True)
-    parser.add_argument('--graph_type', type = str, choices = ['tree-all'])
+    parser.add_argument('--graph_type', type = str, choices = ['tree-all', 'babylm', 'wiki'])
     parser.add_argument('--vocab_size', type = int, default = 5)
     parser.add_argument('--max_prob', type=float, default = 0.8)
     parser.add_argument('--seq_len', type = int, default = 16)
@@ -44,6 +52,14 @@ if __name__=='__main__':
     args = parser.parse_args()
     print(f'running with {args}')
 
+    # When using a pretrained model, make sure to specify a fixed max length
+    if args.pretrained_model_name is not None:
+        assert args.max_length is not None
+    else:
+        assert args.max_length is None
+        assert args.model_type in ['gpt2','llama2']
+        args.max_length = args.seq_len + 1 # add eos_token for GPT2 or LLaMa2
+
     # Set the storage path
     args.base_dir = os.environ.get("MY_DATA_PATH")
     args.cache_dir = f'{args.base_dir}/cache'
@@ -53,27 +69,43 @@ if __name__=='__main__':
     args.device = torch.device("cuda", index=int(args.core_id))
 
     # Generate the dataset name and the run name
-    args.dataset_name = gen_dataset_name(args)
-    args.run_name = gen_run_name(args)
-    os.makedirs(f'{args.base_dir}/attns/{args.run_name}/', exist_ok=True)
+    if args.pretrained_model_name is not None:
+        assert args.dataset_name is not None
+        os.makedirs(f'{args.base_dir}/attns/{args.pretrained_model_name}/', exist_ok=True)
+    else:
+        args.dataset_name = gen_dataset_name(args)
+        args.run_name = gen_run_name(args)
+        os.makedirs(f'{args.base_dir}/attns/{args.run_name}/', exist_ok=True)
 
     # Fix the seed
     seed_everything(args.run_seed)
 
     # Load the tokenizer
-    args.tokenizer = AutoTokenizer.from_pretrained(f'{args.base_dir}/tokenizers/{args.model_type}_tree-all_{args.vocab_size}_{args.max_prob}_{args.seq_len}_{args.seed}')
-    if args.model_type in ['gpt2','llama2']:
-        args.tokenizer.pad_token = args.tokenizer.eos_token
+    if args.pretrained_model_name is not None:
+        args.tokenizer = AutoTokenizer.from_pretrained(args.pretrained_model_name, cache_dir=args.cache_dir)
+    else:
+        args.tokenizer = AutoTokenizer.from_pretrained(f'{args.base_dir}/tokenizers/{args.model_type}_tree-all_{args.vocab_size}_{args.max_prob}_{args.seq_len}_{args.seed}')
+    args.tokenizer.pad_token = args.tokenizer.eos_token
 
-    dataset, data_loader = get_tree_template_loaders(args)
+    # Load the dataset
+    dataset, data_loader = get_template_loaders(args)
 
     # Load the model
-    model = AutoModelForCausalLM.from_pretrained(f"{args.base_dir}/models/{args.run_name}/best")
+    if args.pretrained_model_name is not None:
+        model = AutoModelForCausalLM.from_pretrained(args.pretrained_model_name, cache_dir=args.cache_dir)
+    else:
+        model = AutoModelForCausalLM.from_pretrained(f"{args.base_dir}/models/{args.run_name}/best")
     model.to(args.device)
     model.eval()
 
-    assert args.model_type in ['gpt2','llama2'] and args.graph_type=='tree-all'
-    attns = torch.zeros((len(dataset["temps"]),args.num_layers,args.num_heads,args.seq_len+1,args.seq_len+1))
+    if args.graph_type=='tree-all':
+        attns = torch.zeros((len(dataset["temps"]),args.num_layers,args.num_heads,args.seq_len+1,args.seq_len+1))
+    elif args.graph_type=='babylm':
+        if model.config.model_type=='gpt2':
+            nlayers, nheads = model.config.n_layer, model.config.n_head
+        else:
+            raise NotImplementedError
+        attns = torch.zeros((len(dataset["val"]),nlayers,nheads,args.max_length,args.max_length))
     num_sents = 0
     for examples in data_loader:
         loaded_examples = examples.to(args.device)

@@ -9,68 +9,19 @@ from datasets import load_dataset
 
 #import ot
 
-from utils import gen_dataset_name, gen_run_name, seed_everything
+from utils import gen_dataset_name, gen_run_name, seed_everything, load_config
 
-def load_config(model_type,args):
-    config_kwargs = {
-                    'num_hidden_layers':args.num_layers,
-                    'num_attention_heads':args.num_heads,
-                    'hidden_size':args.hidden_size,
-                    'intermediate_size':args.intermediate_size,
-                    'vocab_size':args.tokenizer.vocab_size,
-                    'max_position_embeddings':32,
-                    'position_embedding_type':'absolute'
-                    }
-    if model_type=='bert':
-        from transformers import BertConfig
-        assert len(args.tokenizer(args.tokenizer.pad_token).input_ids)==3
-        config_kwargs['pad_token_id'] = args.tokenizer(args.tokenizer.pad_token).input_ids[1]
-        return BertConfig(**config_kwargs)
-    elif model_type=='albert':
-        from transformers import AlbertConfig
-        assert len(args.tokenizer(args.tokenizer.pad_token).input_ids)==3
-        assert len(args.tokenizer(args.tokenizer.bos_token).input_ids)==3
-        assert len(args.tokenizer(args.tokenizer.eos_token).input_ids)==3
-        config_kwargs['pad_token_id'] = args.tokenizer(args.tokenizer.pad_token).input_ids[1]
-        config_kwargs['bos_token_id'] = args.tokenizer(args.tokenizer.bos_token).input_ids[1]
-        config_kwargs['eos_token_id'] = args.tokenizer(args.tokenizer.eos_token).input_ids[1]
-        config_kwargs['embedding_size'] = getattr(args,f'hidden_size')
-        return AlbertConfig(**config_kwargs)
-    elif model_type=='gpt2':
-        from transformers import GPT2Config
-        config_kwargs['n_embd'] = config_kwargs.pop('hidden_size')
-        config_kwargs['n_inner'] = config_kwargs.pop('intermediate_size')
-        config_kwargs['n_layer'] = config_kwargs.pop('num_hidden_layers')
-        config_kwargs['n_head'] = config_kwargs.pop('num_attention_heads')
-        config_kwargs['n_positions'] = config_kwargs.pop('max_position_embeddings')
-        _ = config_kwargs.pop('position_embedding_type')
-        assert len(args.tokenizer(args.tokenizer.bos_token).input_ids)==1
-        assert len(args.tokenizer(args.tokenizer.eos_token).input_ids)==1
-        config_kwargs['bos_token_id'] = args.tokenizer(args.tokenizer.bos_token).input_ids[0]
-        config_kwargs['eos_token_id'] = args.tokenizer(args.tokenizer.eos_token).input_ids[0]
-        return GPT2Config(**config_kwargs)
-    elif model_type=='llama2':
-        from transformers import LlamaConfig
-        _ = config_kwargs.pop('position_embedding_type')
-        assert len(args.tokenizer(args.tokenizer.bos_token).input_ids)==2
-        assert len(args.tokenizer(args.tokenizer.eos_token).input_ids)==2
-        assert args.tokenizer(args.tokenizer.bos_token).input_ids[0]==args.tokenizer(args.tokenizer.bos_token).input_ids[1]
-        assert args.tokenizer(args.tokenizer.eos_token).input_ids[0]==args.tokenizer(args.tokenizer.bos_token).input_ids[1]
-        config_kwargs['bos_token_id'] = args.tokenizer(args.tokenizer.bos_token).input_ids[1]
-        config_kwargs['eos_token_id'] = args.tokenizer(args.tokenizer.eos_token).input_ids[1]
-        return LlamaConfig(**config_kwargs)
-    else:
-        raise NotImplementedError
-
-def tokenize_function(examples,tokenizer):
-    tokens = tokenizer(examples["text"], return_special_tokens_mask=True)
+def tokenize_function(examples,tokenizer,max_length):
+    tokens = tokenizer(examples["text"],
+                       padding='max_length', truncation=True, max_length=max_length,
+                       return_special_tokens_mask=True)
     return {'input_ids':tokens.input_ids,
             'attention_mask':tokens.attention_mask}
 
 def process_dataset(dataset,args,remove_cols):
     tokenized_dataset = dataset.map(tokenize_function, batched=True, num_proc=10,
                                     remove_columns=remove_cols,
-                                    fn_kwargs={'tokenizer':args.tokenizer})
+                                    fn_kwargs={'tokenizer':args.tokenizer, 'max_length':args.max_length})
     return tokenized_dataset
 
 def load_sentences(args):
@@ -124,6 +75,15 @@ def get_data_loaders(args):
             val_loaders.append(ex_val_loader)
             tst_loaders.append(ex_tst_loader)
 
+    elif args.graph_type=='babylm':
+        # Create separate dataloaders for all trees
+        val_loader = torch.utils.data.DataLoader(dataset['val'], batch_size=args.batchsize_val,
+                                                 collate_fn=data_collator)
+        tst_loader = torch.utils.data.DataLoader(dataset['tst'], batch_size=args.batchsize_val,
+                                                 collate_fn=data_collator)
+        val_loaders.append(val_loader)
+        tst_loaders.append(tst_loader)
+
     return dataset, data_collator, val_loaders, tst_loaders
 
 def gen_scheduler(optimizer, args):
@@ -141,7 +101,7 @@ def gen_scheduler(optimizer, args):
         raise NotImplementedError
     return scheduler
 
-def evaluate(model, loaders, args):
+def evaluate(model, loaders, args, pretrained_model=None):
     main_out = []
     attn_out = []
     model.eval()
@@ -156,23 +116,32 @@ def evaluate(model, loaders, args):
                                 attention_mask=loaded_examples['attention_mask'],
                                 output_attentions=True)
                 batch_size, num_heads, seq_len = outputs.attentions[0].shape[:-1]
-                if args.graph_type.startswith('nback'):
-                    if args.bias=='nobias':
-                        # calculate the attention loss just for evaluation
-                        args.bias = 'nback-all-1'
-                        templates = get_templates(args, seq_len, batch_size, num_heads)
-                        args.bias = 'nobias'
-                        layer_ids = [1]
-                    else:
-                        templates = get_templates(args, seq_len, batch_size, num_heads)
-                        layer_ids = np.arange(args.num_layers) if args.bias.split('-')[2]=='all' else [int(args.bias.split('-')[2])]
-                    attn_loss = calc_attn_loss_nback(outputs.attentions, templates, layer_ids)
-                elif args.graph_type.startswith('tree'):
-                    if args.bias=='nobias':
-                        attn_loss = torch.tensor([0]).to(args.device)
-                    else:
-                        layer_ids = np.arange(args.num_layers) if args.bias.split('-')[2]=='all' else [int(args.bias.split('-')[2])]
-                        attn_loss = calc_attn_loss_faiss(args, index_list, xb_list, outputs.attentions, layer_ids)
+                if args.bias=='direct':
+                    with torch.no_grad:
+                        outputs_pretrained = pretrained_model(input_ids=loaded_examples['input_ids'],
+                                                              labels=loaded_examples['labels'],
+                                                              attention_mask=loaded_examples['attention_mask'],
+                                                              output_attentions=True)
+                    attn_loss = torch.mean(torch.stack([torch.mean(torch.sum((attn1-attn2)**2,dim=(1,2,3)),dim=0)
+                                                        for attn1, attn2 in zip(outputs.attentions, outputs_pretrained.attentions)]))
+                else:
+                    if args.graph_type.startswith('nback'):
+                        if args.bias=='nobias':
+                            # calculate the attention loss just for evaluation
+                            args.bias = 'nback-all-1'
+                            templates = get_templates(args, seq_len, batch_size, num_heads)
+                            args.bias = 'nobias'
+                            layer_ids = [1]
+                        else:
+                            templates = get_templates(args, seq_len, batch_size, num_heads)
+                            layer_ids = np.arange(args.num_layers) if args.bias.split('-')[2]=='all' else [int(args.bias.split('-')[2])]
+                        attn_loss = calc_attn_loss_nback(outputs.attentions, templates, layer_ids)
+                    elif args.graph_type.startswith('tree'):
+                        if args.bias=='nobias':
+                            attn_loss = torch.tensor([0]).to(args.device)
+                        else:
+                            layer_ids = np.arange(args.num_layers) if args.bias.split('-')[2]=='all' else [int(args.bias.split('-')[2])]
+                            attn_loss = calc_attn_loss_faiss(args, index_list, xb_list, outputs.attentions, layer_ids)
                 main_loss_list.append(outputs.loss.item())
                 attn_loss_list.append(attn_loss.item())
             main_out.append(np.mean(main_loss_list))
@@ -199,18 +168,36 @@ def calc_wasserstein_distance(attns:torch.Tensor, temps:torch.Tensor):
     device = u_weights.device
     return ot.wasserstein_1d(u_values.to(device), v_values.to(device), u_weights, v_weights)
 
+def adjust_layer_assignment(attns, nlayers_new):
+    assert len(attns.shape)==5
+    batch_size, nlayers, nheads, seqlen, _ = attns.shape
+    assert nlayers%nlayers_new==0
+    ratio = nlayers//nlayers_new
+
+    new_attns = np.empty((ratio*batch_size, nlayers_new, nheads, seqlen, seqlen))
+    for layer_id in range(nlayers_new):
+        new_attns[:,layer_id,:,:,:] = attns[:,ratio*layer_id:ratio*(layer_id+1),:,:,:].reshape((ratio*batch_size, nheads, seqlen, seqlen))
+    del attns
+    return new_attns
+
+def load_attns(args):
+    if args.graph_type.startswith('tree') or args.graph_type.startswith('nback'):
+        attns_path = f'{args.base_dir}/attns/{args.attn_run_name}/attns.npy'
+        attns = np.load(attns_path)
+    else:
+        import glob
+        attns_path_list = glob.glob(f'{args.base_dir}/attns/{args.attn_run_name}/*.npy')
+        attns = []
+        for attns_path in attns_path_list:
+            loaded_attns = np.load(attns_path)
+            attns.append(loaded_attns)
+        attns = np.concatenate(attns, axis=0)
+    return attns
+
 def calc_faiss_index(args):
     import faiss
-    from copy import deepcopy
-    datasize, num_epochs = deepcopy(args.datasize), deepcopy(args.num_epochs)
-    bias, beta, run_name = deepcopy(args.bias), deepcopy(args.beta), deepcopy(args.run_name)
-    args.datasize, args.num_epochs = 10000, 10
-    args.bias, args.beta = "nobias", 0.0
-    args.run_name = gen_run_name(args)
-    attns_path = f'{args.base_dir}/attns/{args.run_name}/attns.npy'
-    args.datasize, args.num_epochs = datasize, num_epochs
-    args.bias, args.beta, args.run_name = bias, beta, run_name
-    attns = np.load(attns_path)
+    attns = load_attns(args)
+    attns = adjust_layer_assignment(attns, args.num_layers)
     # attns.shape = (batch_size, nlayers, nheads, seqlen, seqlen)
     assert len(attns.shape)==5
     index_list = []
@@ -277,6 +264,9 @@ def calc_attn_loss_nback(attentions, temps, layer_ids):
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--pretrained_model_name', type = str, default=None)
+    parser.add_argument('--dataset_name', type = str, default=None)
+    parser.add_argument('--max_length', type = int, default=None)
     parser.add_argument('--model_type', type = str, required = True)
     parser.add_argument('--graph_type', type = str, required = True)
     parser.add_argument('--vocab_size', type = int, default = 5)
@@ -306,6 +296,14 @@ if __name__=='__main__':
     args = parser.parse_args()
     print(f'running with {args}')
 
+    # When using a pretrained model, make sure to specify a fixed max length
+    if args.pretrained_model_name is not None:
+        assert args.max_length is not None
+    else:
+        assert args.max_length is None
+        assert args.model_type in ['gpt2','llama2']
+        args.max_length = args.seq_len + 1 # add eos_token for GPT2 or LLaMa2
+
     # Initialize weights and biases with args
     import wandb
     wandb.require("core")
@@ -321,7 +319,8 @@ if __name__=='__main__':
     args.device = torch.device("cuda", index=int(args.core_id))
 
     # Generate the dataset name and the run name
-    args.dataset_name = gen_dataset_name(args)
+    if args.dataset_name is None:
+        args.dataset_name = gen_dataset_name(args)
     args.run_name = gen_run_name(args)
     wandb.config.dataset_name = args.dataset_name
     wandb.config.run_name = args.run_name
@@ -337,8 +336,17 @@ if __name__=='__main__':
     elif args.graph_type.startswith('tree'):
         # Load the tokenizer for all trees
         args.tokenizer = AutoTokenizer.from_pretrained(f'{args.base_dir}/tokenizers/{args.model_type}_tree-all_{args.vocab_size}_{args.max_prob}_{args.seq_len}_{args.seed}')
-    if args.model_type in ['gpt2','llama2']:
-        args.tokenizer.pad_token = args.tokenizer.eos_token
+    else:
+        args.tokenizer = AutoTokenizer.from_pretrained(args.pretrained_model_name, cache_dir=args.cache_dir)
+    assert args.model_type in ['gpt2','llama2']
+    args.tokenizer.pad_token = args.tokenizer.eos_token
+
+    # Load the model if necessary
+    if args.bias=='direct':
+        if args.graph_type.startswith('nback') or args.graph_type.startswith('tree'):
+            pretrained_model = AutoModelForCausalLM.from_pretrained(f'{args.base_dir}/models/{args.pretrained_model_name}/best')
+        else:
+            pretrained_model = AutoModelForCausalLM.from_pretrained(args.pretrained_model_name, cache_dir=args.cache_dir)
 
     dataset, data_collator, val_loaders, tst_loaders = get_data_loaders(args)
 
@@ -380,6 +388,14 @@ if __name__=='__main__':
             batch_size, num_heads, seq_len = outputs.attentions[0].shape[:-1]
             if args.bias=='nobias':
                 attn_loss = torch.tensor([0]).to(args.device)
+            elif args.bias=='direct':
+                with torch.no_grad:
+                    outputs_pretrained = pretrained_model(input_ids=loaded_examples['input_ids'],
+                                                          labels=loaded_examples['labels'],
+                                                          attention_mask=loaded_examples['attention_mask'],
+                                                          output_attentions=True)
+                attn_loss = torch.mean(torch.stack([torch.mean(torch.sum((attn1-attn2)**2,dim=(1,2,3)),dim=0)
+                                                    for attn1, attn2 in zip(outputs.attentions, outputs_pretrained.attentions)]))
             else:
                 layer_ids = np.arange(args.num_layers) if args.bias.split('-')[2]=='all' else [int(args.bias.split('-')[2])]
                 if args.graph_type.startswith('nback'):
