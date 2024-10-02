@@ -29,7 +29,11 @@ def load_sentences(args):
         data_files = {"trn": "trn.txt", "val": "val.txt", "tst": "tst.txt", "ex_val": "ex_val.txt", "ex_tst":"ex_tst.txt", "temps": "templates.txt"}
     else:
         data_files = {"trn": "trn.txt", "val": "val.txt", "tst": "tst.txt"}
-    dataset = load_dataset(f'{args.base_dir}/dataset/{args.dataset_name}', data_files=data_files, cache_dir=args.cache_dir)
+
+    if args.graph_type == 'babylm':
+        dataset = load_dataset(f'{args.base_dir}/babylm/{args.dataset_name}', data_files=data_files, cache_dir=args.cache_dir)
+    else:
+        dataset = load_dataset(f'{args.base_dir}/dataset/{args.dataset_name}', data_files=data_files, cache_dir=args.cache_dir)
     remove_cols = ['text']
 
     tokenized_dataset = process_dataset(dataset, args, remove_cols)
