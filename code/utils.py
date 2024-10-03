@@ -30,8 +30,8 @@ def load_config(model_type,args):
                     'hidden_size':args.hidden_size,
                     'intermediate_size':args.intermediate_size,
                     'vocab_size':args.tokenizer.vocab_size,
-                    'max_position_embeddings':32,
-                    'position_embedding_type':'absolute'
+                    'max_position_embeddings':args.max_length,
+                    'position_embedding_type':'absolute',
                     }
     if model_type=='bert':
         from transformers import BertConfig
