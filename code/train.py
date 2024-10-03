@@ -398,7 +398,7 @@ if __name__=='__main__':
             if args.bias=='nobias':
                 attn_loss = torch.tensor([0]).to(args.device)
             elif args.bias=='direct':
-                with torch.no_grad:
+                with torch.no_grad():
                     outputs_pretrained = pretrained_model(input_ids=loaded_examples['input_ids'],
                                                           labels=loaded_examples['labels'],
                                                           attention_mask=loaded_examples['attention_mask'],
