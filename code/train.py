@@ -40,6 +40,8 @@ def load_sentences(args):
     tokenized_dataset = tokenized_dataset.with_format("torch")
     #tokenized_dataset['trn'] = tokenized_dataset['trn'].shuffle(seed=args.run_seed)
     tokenized_dataset['trn'] = tokenized_dataset['trn'].filter(lambda example, idx: idx < args.datasize, with_indices=True)
+    tokenized_dataset['val'] = tokenized_dataset['val'].filter(lambda example, idx: idx < 10000, with_indices=True)
+    tokenized_dataset['tst'] = tokenized_dataset['tst'].filter(lambda example, idx: idx < 10000, with_indices=True)
     return tokenized_dataset
 
 def get_data_loaders(args):
