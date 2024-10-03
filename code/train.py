@@ -121,11 +121,10 @@ def evaluate(model, loaders, args, pretrained_model=None):
                                 output_attentions=True)
                 batch_size, num_heads, seq_len = outputs.attentions[0].shape[:-1]
                 if args.bias=='direct':
-                    with torch.no_grad:
-                        outputs_pretrained = pretrained_model(input_ids=loaded_examples['input_ids'],
-                                                              labels=loaded_examples['labels'],
-                                                              attention_mask=loaded_examples['attention_mask'],
-                                                              output_attentions=True)
+                    outputs_pretrained = pretrained_model(input_ids=loaded_examples['input_ids'],
+                                                          labels=loaded_examples['labels'],
+                                                          attention_mask=loaded_examples['attention_mask'],
+                                                          output_attentions=True)
                     attn_loss = torch.mean(torch.stack([torch.mean(torch.sum((attn1-attn2)**2,dim=(1,2,3)),dim=0)
                                                         for attn1, attn2 in zip(outputs.attentions, outputs_pretrained.attentions)]))
                 else:
