@@ -350,6 +350,8 @@ if __name__=='__main__':
             pretrained_model = AutoModelForCausalLM.from_pretrained(f'{args.base_dir}/models/{args.pretrained_model_name}/best')
         else:
             pretrained_model = AutoModelForCausalLM.from_pretrained(args.pretrained_model_name, cache_dir=args.cache_dir)
+        pretrained_model.eval()
+        pretrained_model.to(args.device)
     else:
         pretrained_model = None
 
