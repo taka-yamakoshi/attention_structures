@@ -350,6 +350,8 @@ if __name__=='__main__':
             pretrained_model = AutoModelForCausalLM.from_pretrained(f'{args.base_dir}/models/{args.pretrained_model_name}/best')
         else:
             pretrained_model = AutoModelForCausalLM.from_pretrained(args.pretrained_model_name, cache_dir=args.cache_dir)
+    else:
+        pretrained_model = None
 
     dataset, data_collator, val_loaders, tst_loaders = get_data_loaders(args)
 
@@ -368,7 +370,7 @@ if __name__=='__main__':
     scheduler = gen_scheduler(optimizer, args)
 
     step_id = 0
-    val_main_loss, val_attn_loss = evaluate(model,val_loaders,args)
+    val_main_loss, val_attn_loss = evaluate(model,val_loaders,args,pretrained_model=pretrained_model)
     wandb.log(data={f'validation/val-main-{i+1}':loss
                     for i, loss in enumerate(val_main_loss)},step=step_id)
     wandb.log(data={f'validation/val-attn-{i+1}':loss
@@ -423,7 +425,7 @@ if __name__=='__main__':
                         },
                         step=step_id)
         if epoch%(max(args.num_epochs//10,1))==0:
-            val_main_loss, val_attn_loss = evaluate(model,val_loaders,args)
+            val_main_loss, val_attn_loss = evaluate(model,val_loaders,args,pretrained_model=pretrained_model)
             wandb.log(data={f'validation/val-main-{i+1}':loss
                             for i, loss in enumerate(val_main_loss)},step=step_id)
             wandb.log(data={f'validation/val-attn-{i+1}':loss
@@ -435,12 +437,12 @@ if __name__=='__main__':
                 model.save_pretrained(f"{args.base_dir}/models/{args.run_name}/best")
                 print(f'new best val loss: {best_val_loss}')
     model.save_pretrained(f"{args.base_dir}/models/{args.run_name}/last")
-    tst_main_loss, tst_attn_loss = evaluate(model,tst_loaders,args)
+    tst_main_loss, tst_attn_loss = evaluate(model,tst_loaders,args,pretrained_model=pretrained_model)
     wandb.log(data={f'test-last/tst-main-{i+1}':loss for i, loss in enumerate(tst_main_loss)})
     wandb.log(data={f'test-last/tst-attn-{i+1}':loss for i, loss in enumerate(tst_attn_loss)})
 
     model = AutoModelForCausalLM.from_pretrained(f"{args.base_dir}/models/{args.run_name}/best")
     model.to(args.device)
-    tst_main_loss, tst_attn_loss = evaluate(model,tst_loaders,args)
+    tst_main_loss, tst_attn_loss = evaluate(model,tst_loaders,args,pretrained_model=pretrained_model)
     wandb.log(data={f'test-best/tst-main-{i+1}':loss for i, loss in enumerate(tst_main_loss)})
     wandb.log(data={f'test-best/tst-attn-{i+1}':loss for i, loss in enumerate(tst_attn_loss)})
