@@ -4,93 +4,12 @@ import argparse
 import os
 import math
 
-from transformers import AutoTokenizer, AutoModelForCausalLM, DataCollatorForLanguageModeling
-from datasets import load_dataset
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
 #import ot
 
 from utils import gen_dataset_name, gen_run_name, seed_everything, load_config
-
-def tokenize_function(examples,tokenizer,max_length):
-    tokens = tokenizer(examples["text"],
-                       padding='max_length', truncation=True, max_length=max_length,
-                       return_special_tokens_mask=True)
-    return {'input_ids':tokens.input_ids,
-            'attention_mask':tokens.attention_mask}
-
-def process_dataset(dataset,args,remove_cols):
-    tokenized_dataset = dataset.map(tokenize_function, batched=True, num_proc=10,
-                                    remove_columns=remove_cols,
-                                    fn_kwargs={'tokenizer':args.tokenizer, 'max_length':args.max_length})
-    return tokenized_dataset
-
-def load_sentences(args):
-    if args.graph_type == 'tree-all':
-        data_files = {"trn": "trn.txt", "val": "val.txt", "tst": "tst.txt", "ex_val": "ex_val.txt", "ex_tst":"ex_tst.txt", "temps": "templates.txt"}
-    else:
-        data_files = {"trn": "trn.txt", "val": "val.txt", "tst": "tst.txt"}
-
-    if args.graph_type == 'babylm':
-        dataset = load_dataset(f'{args.base_dir}/babylm/{args.dataset_name}', data_files=data_files, cache_dir=args.cache_dir)
-    else:
-        dataset = load_dataset(f'{args.base_dir}/dataset/{args.dataset_name}', data_files=data_files, cache_dir=args.cache_dir)
-    remove_cols = ['text']
-
-    tokenized_dataset = process_dataset(dataset, args, remove_cols)
-    tokenized_dataset = tokenized_dataset.with_format("torch")
-    #tokenized_dataset['trn'] = tokenized_dataset['trn'].shuffle(seed=args.run_seed)
-    tokenized_dataset['trn'] = tokenized_dataset['trn'].filter(lambda example, idx: idx < args.datasize, with_indices=True)
-    tokenized_dataset['val'] = tokenized_dataset['val'].filter(lambda example, idx: idx < 10000, with_indices=True)
-    tokenized_dataset['tst'] = tokenized_dataset['tst'].filter(lambda example, idx: idx < 10000, with_indices=True)
-    return tokenized_dataset
-
-def get_data_loaders(args):
-    # Load the dataset and the data collator
-    dataset = load_sentences(args)
-    data_collator = DataCollatorForLanguageModeling(tokenizer=args.tokenizer,mlm=False)
-
-    # Create the dataloaders
-    val_loaders = []
-    tst_loaders = []
-    if args.graph_type.startswith('nback'):
-        # Create separate dataloaders for all n's
-        for n in range(1,6):
-            args.dataset_name = f'nback-{n}_{args.vocab_size}_{args.max_prob}_{args.seq_len}_{args.seed}'
-            eval_dataset = load_sentences(args)
-            val_loader = torch.utils.data.DataLoader(eval_dataset['val'], batch_size=args.batchsize_val,
-                                                     collate_fn=data_collator)
-            tst_loader = torch.utils.data.DataLoader(eval_dataset['tst'], batch_size=args.batchsize_val,
-                                                     collate_fn=data_collator)
-            val_loaders.append(val_loader)
-            tst_loaders.append(tst_loader)
-        args.dataset_name = gen_dataset_name(args)
-
-    elif args.graph_type.startswith('tree'):
-        # Create separate dataloaders for all trees
-        val_loader = torch.utils.data.DataLoader(dataset['val'], batch_size=args.batchsize_val,
-                                                 collate_fn=data_collator)
-        tst_loader = torch.utils.data.DataLoader(dataset['tst'], batch_size=args.batchsize_val,
-                                                 collate_fn=data_collator)
-        val_loaders.append(val_loader)
-        tst_loaders.append(tst_loader)
-        if args.graph_type=='tree-all':
-            ex_val_loader = torch.utils.data.DataLoader(dataset['ex_val'], batch_size=args.batchsize_val,
-                                                        collate_fn=data_collator)
-            ex_tst_loader = torch.utils.data.DataLoader(dataset['ex_tst'], batch_size=args.batchsize_val,
-                                                        collate_fn=data_collator)
-            val_loaders.append(ex_val_loader)
-            tst_loaders.append(ex_tst_loader)
-
-    elif args.graph_type=='babylm':
-        # Create separate dataloaders for all trees
-        val_loader = torch.utils.data.DataLoader(dataset['val'], batch_size=args.batchsize_val,
-                                                 collate_fn=data_collator)
-        tst_loader = torch.utils.data.DataLoader(dataset['tst'], batch_size=args.batchsize_val,
-                                                 collate_fn=data_collator)
-        val_loaders.append(val_loader)
-        tst_loaders.append(tst_loader)
-
-    return dataset, data_collator, val_loaders, tst_loaders
+from utils_dataset import get_data_loaders
 
 def gen_scheduler(optimizer, args):
     num_steps = args.num_epochs*math.ceil(args.datasize/args.batchsize_trn)
@@ -152,6 +71,11 @@ def evaluate(model, loaders, args, pretrained_model=None):
             main_out.append(np.mean(main_loss_list))
             attn_out.append(np.mean(attn_loss_list))
     return main_out, attn_out
+
+def evaluate_linzen(model, loaders, args):
+    df = eval_model_linzen('../colorlessgreenRNNs/data/linzen_testset',args.tokenizer,model,args.device,max_length=args.max_length)
+    df_group = df.filter(['num_attr','acc']).groupby(['num_attr'],as_index=False).mean()
+    return {f'eval/linzen_test_{num_attr}':df_group.loc[lambda d: d['num_attr']==str(num_attr)]['acc'].item() for num_attr in range(5)}
 
 def get_template_nback(n:int, seq_len:int, batch_size:int, num_heads:int):
     # adjusted for next toke prediction
