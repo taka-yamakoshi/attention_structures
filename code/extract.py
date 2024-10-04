@@ -117,15 +117,16 @@ if __name__=='__main__':
                             attention_mask=loaded_examples['attention_mask'],
                             output_attentions=True)
         batch_size = len(loaded_examples['input_ids'])
-        attns.append(torch.stack(outputs.attentions).reshape((batch_size,nlayers,nheads,args.max_length,args.max_length)))
+        attns.append(torch.stack(outputs.attentions).transpose(0,1))
         num_sents += batch_size
         if num_sents >= args.batchsize_save:
-            attns = torch.stack(attns)
+            attns = torch.stack(attns).reshape((-1,nlayers,nheads,args.max_length,args.max_length))
             np.save(f'{save_path}/attns_{batch_id}.npy', attns.cpu().numpy())
             print(f'Saved batch {batch_id}')
             attns = []
             num_sents = 0
             batch_id += 1
-    attns = torch.stack(attns)
-    np.save(f'{save_path}/attns_{batch_id}.npy', attns.cpu().numpy())
-    print(f'Saved batch {batch_id}')
+    # Ignore the remainder
+    #attns = torch.stack(attns).reshape((-1,nlayers,nheads,args.max_length,args.max_length))
+    #np.save(f'{save_path}/attns_{batch_id}.npy', attns.cpu().numpy())
+    #print(f'Saved batch {batch_id}')
