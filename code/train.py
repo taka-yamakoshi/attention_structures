@@ -148,7 +148,7 @@ if __name__=='__main__':
     wandb.log(data={f'validation/val-attn-{i+1}':loss
                     for i, loss in enumerate(val_attn_loss)},step=step_id)
     if args.graph_type.startswith('babylm'):
-        out_linzen = evaluate_linzen(model, args)
+        out_linzen = evaluate_linzen(model, args, num_samples=100)
         out_blimp = evaluate_blimp(model, args, blimp_tasks, num_samples=100)
         wandb.log(data=out_linzen, step=step_id)
         wandb.log(data=out_blimp, step=step_id)
@@ -210,7 +210,7 @@ if __name__=='__main__':
             wandb.log(data={f'validation/val-attn-{i+1}':loss
                             for i, loss in enumerate(val_attn_loss)},step=step_id)
             if args.graph_type.startswith('babylm'):
-                out_linzen = evaluate_linzen(model, args)
+                out_linzen = evaluate_linzen(model, args, num_samples=100)
                 out_blimp = evaluate_blimp(model, args, blimp_tasks, num_samples=100)
                 wandb.log(data=out_linzen, step=step_id)
                 wandb.log(data=out_blimp, step=step_id)

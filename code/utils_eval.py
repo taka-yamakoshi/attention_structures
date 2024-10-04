@@ -195,8 +195,8 @@ def eval_model_blimp(data_path,task,tokenizer,model,device,num_samples=None,shuf
         text = random.sample(text,len(text))
     return eval_model_pairs(tokenizer,model,device,head,text,max_length)
 
-def evaluate_linzen(model, args):
-    df = eval_model_linzen('../colorlessgreenRNNs/data/linzen_testset',args.tokenizer,model,args.device,max_length=args.max_length)
+def evaluate_linzen(model, args, num_samples=None):
+    df = eval_model_linzen('../colorlessgreenRNNs/data/linzen_testset',args.tokenizer,model,args.device,num_samples=num_samples,max_length=args.max_length)
     df_group = df.filter(['num_attr','acc']).groupby(['num_attr'],as_index=False).mean()
     return {f'eval/linzen_test_{num_attr}':df_group.loc[lambda d: d['num_attr']==str(num_attr)]['acc'].item() for num_attr in range(5)}
 
