@@ -4,7 +4,6 @@ import argparse
 import os
 
 from transformers import AutoTokenizer, AutoModelForCausalLM, DataCollatorForLanguageModeling
-from datasets import load_dataset
 
 from utils import gen_dataset_name, gen_run_name, seed_everything
 from train import load_sentences
@@ -43,6 +42,7 @@ if __name__=='__main__':
 
     parser.add_argument('--batchsize_trn', type = int, default = 10)
     parser.add_argument('--batchsize_val', type = int, default = 100)
+    parser.add_argument('--batchsize_save', type = int, default = 10000)
     parser.add_argument('--lr', type = float, default = 1e-3)
     parser.add_argument('--scheduler_type', type = str, default = 'constant')
     parser.add_argument('--num_epochs', type = int, default = 5)
@@ -71,11 +71,12 @@ if __name__=='__main__':
     # Generate the dataset name and the run name
     if args.pretrained_model_name is not None:
         assert args.dataset_name is not None
-        os.makedirs(f'{args.base_dir}/attns/{args.pretrained_model_name}/', exist_ok=True)
+        save_path = f'{args.base_dir}/attns/{args.pretrained_model_name}'
     else:
         args.dataset_name = gen_dataset_name(args)
         args.run_name = gen_run_name(args)
-        os.makedirs(f'{args.base_dir}/attns/{args.run_name}/', exist_ok=True)
+        save_path = f'{args.base_dir}/attns/{args.run_name}'
+    os.makedirs(save_path+'/', exist_ok=True)
 
     # Fix the seed
     seed_everything(args.run_seed)
@@ -99,14 +100,15 @@ if __name__=='__main__':
     model.eval()
 
     if args.graph_type=='tree-all':
-        attns = torch.zeros((len(dataset["temps"]),args.num_layers,args.num_heads,args.seq_len+1,args.seq_len+1))
+        nlayers, nheads = args.num_layers, args.num_heads
     elif args.graph_type=='babylm':
         if model.config.model_type=='gpt2':
             nlayers, nheads = model.config.n_layer, model.config.n_head
         else:
             raise NotImplementedError
-        attns = torch.zeros((len(dataset["val"]),nlayers,nheads,args.max_length,args.max_length))
     num_sents = 0
+    batch_id = 0
+    attns = []
     for examples in data_loader:
         loaded_examples = examples.to(args.device)
         with torch.no_grad():
@@ -115,7 +117,15 @@ if __name__=='__main__':
                             attention_mask=loaded_examples['attention_mask'],
                             output_attentions=True)
         batch_size = len(loaded_examples['input_ids'])
-        for layer_id in range(args.num_layers):
-            attns[num_sents:num_sents+batch_size,layer_id,:,:,:] = outputs.attentions[layer_id]
+        attns.append(torch.stack(outputs.attentions).reshape((batch_size,nlayers,nheads,args.max_length,args.max_length)))
         num_sents += batch_size
-    np.save(f'{args.base_dir}/attns/{args.run_name}/attns.npy', attns.cpu().numpy())
+        if num_sents >= args.batchsize_save:
+            attns = torch.stack(attns)
+            np.save(f'{save_path}/attns_{batch_id}.npy', attns.cpu().numpy())
+            print(f'Saved batch {batch_id}')
+            attns = []
+            num_sents = 0
+            batch_id += 1
+    attns = torch.stack(attns)
+    np.save(f'{save_path}/attns_{batch_id}.npy', attns.cpu().numpy())
+    print(f'Saved batch {batch_id}')
