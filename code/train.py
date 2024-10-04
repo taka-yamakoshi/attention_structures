@@ -60,7 +60,7 @@ if __name__=='__main__':
     args = parser.parse_args()
     print(f'running with {args}')
 
-    blimp_tasks = []
+    blimp_tasks = ['distractor_agreement_relational_noun','distractor_agreement_relative_clause']
 
     # When using a pretrained model, make sure to specify a fixed max length
     if args.pretrained_model_name is not None:
@@ -149,7 +149,7 @@ if __name__=='__main__':
                     for i, loss in enumerate(val_attn_loss)},step=step_id)
     if args.graph_type.startswith('babylm'):
         out_linzen = evaluate_linzen(model, args)
-        out_blimp = evaluate_blimp(model, args, blimp_tasks)
+        out_blimp = evaluate_blimp(model, args, blimp_tasks, num_samples=100)
         wandb.log(data=out_linzen, step=step_id)
         wandb.log(data=out_blimp, step=step_id)
     model.save_pretrained(f"{args.base_dir}/models/{args.run_name}/ckpt-{step_id}")
@@ -211,7 +211,7 @@ if __name__=='__main__':
                             for i, loss in enumerate(val_attn_loss)},step=step_id)
             if args.graph_type.startswith('babylm'):
                 out_linzen = evaluate_linzen(model, args)
-                out_blimp = evaluate_blimp(model, args, blimp_tasks)
+                out_blimp = evaluate_blimp(model, args, blimp_tasks, num_samples=100)
                 wandb.log(data=out_linzen, step=step_id)
                 wandb.log(data=out_blimp, step=step_id)
             model.save_pretrained(f"{args.base_dir}/models/{args.run_name}/ckpt-{step_id}")
