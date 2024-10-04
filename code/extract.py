@@ -127,6 +127,7 @@ if __name__=='__main__':
             attns = []
             num_sents = 0
             batch_id += 1
-    attns = np.concatenate(attns, axis=0)
-    np.save(f'{save_path}/attns_{batch_id}.npy', attns)
-    print(f'Saved batch {batch_id}')
+    if len(attns)>0:
+        attns = np.concatenate(attns, axis=0)
+        np.save(f'{save_path}/attns_{batch_id}.npy', attns)
+        print(f'Saved batch {batch_id}')
