@@ -15,6 +15,7 @@ def get_template_loaders(args):
     if args.graph_type.startswith('tree'):
         subset = 'temps'
     else:
+        dataset['val'] = dataset['val'].shuffle(seed=args.run_seed)
         subset = 'val'
     data_loader = torch.utils.data.DataLoader(dataset[subset], batch_size=args.batchsize_val,collate_fn=data_collator)
     return dataset, data_loader
@@ -117,16 +118,15 @@ if __name__=='__main__':
                             attention_mask=loaded_examples['attention_mask'],
                             output_attentions=True)
         batch_size = len(loaded_examples['input_ids'])
-        attns.append(torch.stack(outputs.attentions).transpose(0,1))
+        attns.append(torch.stack(outputs.attentions).transpose(0,1).cpu().numpy())
         num_sents += batch_size
         if num_sents >= args.batchsize_save:
-            attns = torch.stack(attns).reshape((-1,nlayers,nheads,args.max_length,args.max_length))
-            np.save(f'{save_path}/attns_{batch_id}.npy', attns.cpu().numpy())
+            attns = np.concatenate(attns, axis=0)
+            np.save(f'{save_path}/attns_{batch_id}.npy', attns)
             print(f'Saved batch {batch_id}')
             attns = []
             num_sents = 0
             batch_id += 1
-    # Ignore the remainder
-    #attns = torch.stack(attns).reshape((-1,nlayers,nheads,args.max_length,args.max_length))
-    #np.save(f'{save_path}/attns_{batch_id}.npy', attns.cpu().numpy())
-    #print(f'Saved batch {batch_id}')
+    attns = np.concatenate(attns, axis=0)
+    np.save(f'{save_path}/attns_{batch_id}.npy', attns)
+    print(f'Saved batch {batch_id}')
