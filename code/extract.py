@@ -16,6 +16,7 @@ def get_template_loaders(args):
         subset = 'temps'
     else:
         dataset['val'] = dataset['val'].shuffle(seed=args.run_seed)
+        dataset['val'] = dataset['val'].filter(lambda example, idx: idx < args.datasize, with_indices=True)
         subset = 'val'
     data_loader = torch.utils.data.DataLoader(dataset[subset], batch_size=args.batchsize_val,collate_fn=data_collator)
     return dataset, data_loader
