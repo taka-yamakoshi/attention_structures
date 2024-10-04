@@ -25,7 +25,7 @@ if __name__=='__main__':
     parser.add_argument('--pretrained_model_name', type = str, default=None)
     parser.add_argument('--max_length', type = int, default=None)
     parser.add_argument('--dataset_name', type = str, default=None)
-    parser.add_argument('--model_type', type = str, required = True)
+    parser.add_argument('--model_type', type = str)
     parser.add_argument('--graph_type', type = str, choices = ['tree-all', 'babylm', 'wiki'])
     parser.add_argument('--vocab_size', type = int, default = 5)
     parser.add_argument('--max_prob', type=float, default = 0.8)
