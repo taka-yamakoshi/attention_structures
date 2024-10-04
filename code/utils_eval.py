@@ -41,7 +41,7 @@ def evaluate(model, loaders, args, pretrained_model=None, index_list=None, xb_li
                             templates = get_templates(args, seq_len, batch_size, num_heads)
                             layer_ids = np.arange(args.num_layers) if args.bias.split('-')[2]=='all' else [int(args.bias.split('-')[2])]
                         attn_loss = calc_attn_loss_nback(outputs.attentions, templates, layer_ids)
-                    elif args.graph_type.startswith('tree'):
+                    elif args.graph_type.startswith('tree') or args.graph_type.startswith('babylm'):
                         if args.bias=='nobias':
                             attn_loss = torch.tensor([0]).to(args.device)
                         else:
