@@ -187,11 +187,11 @@ def adjust_layer_assignment(attns, nlayers_new):
 
 def load_attns(args):
     if args.graph_type.startswith('tree') or args.graph_type.startswith('nback'):
-        attns_path = f'{args.base_dir}/attns/{args.attn_run_name}/attns.npy'
+        attns_path = f'{args.base_dir}/attns/{args.pretrained_model_name}/attns.npy'
         attns = np.load(attns_path)
     else:
         import glob
-        attns_path_list = glob.glob(f'{args.base_dir}/attns/{args.attn_run_name}/*.npy')
+        attns_path_list = glob.glob(f'{args.base_dir}/attns/{args.pretrained_model_name}/attns_*.npy')
         attns = []
         for attns_path in attns_path_list:
             loaded_attns = np.load(attns_path)
@@ -366,8 +366,9 @@ if __name__=='__main__':
     model.to(args.device)
 
     # Train the faiss index
-    if args.graph_type.startswith('tree'):
-        index_list, xb_list = calc_faiss_index(args)
+    if args.bias not in ['nobias','direct']:
+        if args.graph_type.startswith('tree') or args.graph_type.startswith('babylm'):
+            index_list, xb_list = calc_faiss_index(args)
 
     # Create the optimizer and the scheduler
     optimizer = torch.optim.AdamW(model.parameters(),lr=args.lr)
@@ -410,7 +411,7 @@ if __name__=='__main__':
                 if args.graph_type.startswith('nback'):
                     templates = get_templates(args, seq_len, batch_size, num_heads)
                     attn_loss = calc_attn_loss_nback(outputs.attentions, templates, layer_ids)
-                elif args.graph_type.startswith('tree'):
+                elif args.graph_type.startswith('tree') or args.graph_type.startswith('babylm'):
                     attn_loss = calc_attn_loss_faiss(args, index_list, xb_list, outputs.attentions, layer_ids)
 
             main_loss = outputs.loss
