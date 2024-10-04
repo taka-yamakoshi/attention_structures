@@ -200,6 +200,9 @@ def evaluate_linzen(model, args):
     df_group = df.filter(['num_attr','acc']).groupby(['num_attr'],as_index=False).mean()
     return {f'eval/linzen_test_{num_attr}':df_group.loc[lambda d: d['num_attr']==str(num_attr)]['acc'].item() for num_attr in range(5)}
 
-def evaluate_blimp(task,model,args):
-    df = eval_model_blimp('../blimp/data',task,args.tokenizer,model,args.device,max_length=args.max_length)
-    return df['acc'].mean()
+def evaluate_blimp(model, args, tasks):
+    out = {}
+    for task in tasks:
+        df = eval_model_blimp('../blimp/data',task,args.tokenizer,model,args.device,max_length=args.max_length)
+        out[f'eval/blimp_test_{task}'] = df['acc'].mean()
+    return out
