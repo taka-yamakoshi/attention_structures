@@ -31,15 +31,14 @@ def load_sentences(args):
 
     tokenized_dataset = process_dataset(dataset, args, remove_cols)
     tokenized_dataset = tokenized_dataset.with_format("torch")
-    #tokenized_dataset['trn'] = tokenized_dataset['trn'].shuffle(seed=args.run_seed)
-    tokenized_dataset['trn'] = tokenized_dataset['trn'].filter(lambda example, idx: idx < args.datasize, with_indices=True)
-    tokenized_dataset['val'] = tokenized_dataset['val'].filter(lambda example, idx: idx < 10000, with_indices=True)
-    tokenized_dataset['tst'] = tokenized_dataset['tst'].filter(lambda example, idx: idx < 10000, with_indices=True)
     return tokenized_dataset
 
 def get_data_loaders(args):
     # Load the dataset and the data collator
     dataset = load_sentences(args)
+    dataset['trn'] = dataset['trn'].filter(lambda example, idx: idx < args.datasize, with_indices=True)
+    dataset['val'] = dataset['val'].filter(lambda example, idx: idx < 10000, with_indices=True)
+    dataset['tst'] = dataset['tst'].filter(lambda example, idx: idx < 10000, with_indices=True)
     data_collator = DataCollatorForLanguageModeling(tokenizer=args.tokenizer,mlm=False)
 
     # Create the dataloaders
