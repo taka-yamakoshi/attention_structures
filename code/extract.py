@@ -6,7 +6,7 @@ import os
 from transformers import AutoTokenizer, AutoModelForCausalLM, DataCollatorForLanguageModeling
 
 from utils import gen_dataset_name, gen_run_name, seed_everything
-from train import load_sentences
+from utils_dataset import load_sentences
 
 def get_template_loaders(args):
     # Load the dataset and the data collator
