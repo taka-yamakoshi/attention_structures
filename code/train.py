@@ -72,6 +72,7 @@ if __name__=='__main__':
 
     # Initialize weights and biases with args
     import wandb
+    wandb.login(key=os.environ.get("WANDB_KEY"))
     wandb.require("core")
     wandb.init(project=args.wandb_name)
     wandb.config.update(args.__dict__)
