@@ -9,7 +9,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from utils import gen_dataset_name, gen_run_name, seed_everything, load_config
 from utils_dataset import get_data_loaders
 from utils_attn_loss import calc_faiss_index, get_templates, calc_attn_loss_nback, calc_attn_loss_faiss
-from utils_eval import evaluate, evaluate_linzen, evaluate_blimp
+from utils_eval import evaluate, evaluate_linzen, evaluate_blimp, evaluate_zorro
 
 def gen_scheduler(optimizer, args):
     num_steps = args.num_epochs*math.ceil(args.datasize/args.batchsize_trn)
@@ -61,6 +61,7 @@ if __name__=='__main__':
     print(f'running with {args}')
 
     blimp_tasks = ['distractor_agreement_relational_noun','distractor_agreement_relative_clause']
+    zorro_tasks = ['agreement_determiner_noun-across_1_adjective','agreement_determiner_noun-between_neighbors']
 
     # When using a pretrained model, make sure to specify a fixed max length
     if args.pretrained_model_name is not None:
@@ -151,8 +152,10 @@ if __name__=='__main__':
     if args.graph_type.startswith('babylm'):
         out_linzen = evaluate_linzen(model, args, num_samples=100)
         out_blimp = evaluate_blimp(model, args, blimp_tasks, num_samples=100)
+        out_zorro = evaluate_zorro(model, args, zorro_tasks, num_samples=100)
         wandb.log(data=out_linzen, step=step_id)
         wandb.log(data=out_blimp, step=step_id)
+        wandb.log(data=out_zorro, step=step_id)
     model.save_pretrained(f"{args.base_dir}/models/{args.run_name}/ckpt-{step_id}")
 
     best_val_loss = np.inf
@@ -213,8 +216,10 @@ if __name__=='__main__':
             if args.graph_type.startswith('babylm'):
                 out_linzen = evaluate_linzen(model, args, num_samples=100)
                 out_blimp = evaluate_blimp(model, args, blimp_tasks, num_samples=100)
+                out_zorro = evaluate_zorro(model, args, zorro_tasks, num_samples=100)
                 wandb.log(data=out_linzen, step=step_id)
                 wandb.log(data=out_blimp, step=step_id)
+                wandb.log(data=out_zorro, step=step_id)
             model.save_pretrained(f"{args.base_dir}/models/{args.run_name}/ckpt-{step_id}")
             val_loss = np.mean(val_main_loss)+args.beta*np.mean(val_attn_loss)
             if val_loss<best_val_loss:
@@ -230,8 +235,10 @@ if __name__=='__main__':
     if args.graph_type.startswith('babylm'):
         out_linzen = evaluate_linzen(model, args)
         out_blimp = evaluate_blimp(model, args, blimp_tasks)
+        out_zorro = evaluate_zorro(model, args, zorro_tasks)
         wandb.log(data=out_linzen, step=step_id)
         wandb.log(data=out_blimp, step=step_id)
+        wandb.log(data=out_zorro, step=step_id)
 
     model = AutoModelForCausalLM.from_pretrained(f"{args.base_dir}/models/{args.run_name}/best")
     model.to(args.device)
@@ -243,5 +250,7 @@ if __name__=='__main__':
     if args.graph_type.startswith('babylm'):
         out_linzen = evaluate_linzen(model, args)
         out_blimp = evaluate_blimp(model, args, blimp_tasks)
+        out_zorro = evaluate_zorro(model, args, zorro_tasks)
         wandb.log(data=out_linzen, step=step_id)
         wandb.log(data=out_blimp, step=step_id)
+        wandb.log(data=out_zorro, step=step_id)

@@ -95,6 +95,18 @@ def load_blimp(data_path,task):
         text.append([pair_id,sent_good,sent_bad])
     return head, text
 
+def load_zorro(data_path, task):
+    with open(f'{data_path}/{task}.txt','r') as f:
+        file = f.readlines()
+    assert len(file)==4000
+    head = ['pairID','sent_good','sent_bad']
+    text = []
+    for pair_id in range(len(file)//2):
+        sent_bad = file[2*pair_id]
+        sent_good = file[2*pair_id+1]
+        text.append([pair_id,sent_good,sent_bad])
+    return head, text
+
 def check_sent_length(tokenizer,sent,max_length):
     if max_length is None:
         return True
@@ -195,14 +207,35 @@ def eval_model_blimp(data_path,task,tokenizer,model,device,num_samples=None,shuf
         text = random.sample(text,len(text))
     return eval_model_pairs(tokenizer,model,device,head,text,max_length)
 
+def eval_model_zorro(data_path,task,tokenizer,model,device,num_samples=None,shuffle=True,max_length=None):
+    head,text = load_zorro(data_path,task)
+    if num_samples is not None:
+        text = random.sample(text,num_samples)
+    elif shuffle:
+        text = random.sample(text,len(text))
+    return eval_model_pairs(tokenizer,model,device,head,text,max_length)
+
 def evaluate_linzen(model, args, num_samples=None):
-    df = eval_model_linzen('../colorlessgreenRNNs/data/linzen_testset',args.tokenizer,model,args.device,num_samples=num_samples,max_length=args.max_length)
+    df = eval_model_linzen('../colorlessgreenRNNs/data/linzen_testset',
+                           args.tokenizer,model,args.device,
+                           num_samples=num_samples,max_length=args.max_length)
     df_group = df.filter(['num_attr','acc']).groupby(['num_attr'],as_index=False).mean()
     return {f'eval/linzen_test_{num_attr}':df_group.loc[lambda d: d['num_attr']==str(num_attr)]['acc'].item() for num_attr in range(5)}
 
 def evaluate_blimp(model, args, tasks, num_samples=None):
     out = {}
     for task in tasks:
-        df = eval_model_blimp('../blimp/data',task,args.tokenizer,model,args.device,num_samples=num_samples,max_length=args.max_length)
+        df = eval_model_blimp('../blimp/data',task,
+                              args.tokenizer,model,args.device,
+                              num_samples=num_samples,max_length=args.max_length)
         out[f'eval/blimp_test_{task}'] = df['acc'].mean()
+    return out
+
+def evaluate_zorro(model, args, tasks, num_samples=None):
+    out = {}
+    for task in tasks:
+        df = eval_model_zorro('../Zorro/sentences/babyberta',task,
+                              args.tokenizer,model,args.device,
+                              num_samples=num_samples,max_length=args.max_length)
+        out[f'eval/zorro_test_{task}'] = df['acc'].mean()
     return out
