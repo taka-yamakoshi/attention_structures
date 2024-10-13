@@ -169,7 +169,7 @@ def calc_prob_prefix(tokenizer,model,device,prefix,cont):
     cont_logprob = np.empty(len(input_ids)-start_id)
     for pos in range(start_id,len(input_ids)):
         cont_logprob[pos-start_id] = logprobs[0][pos-1][input_ids[pos]]
-    return np.sum(cont_logprob)
+    return np.sum(cont_logprob).item()
 
 def calc_prob_causal_lm(tokenizer,model,device,sent):
     tokenized = tokenizer(sent)
@@ -189,7 +189,7 @@ def calc_prob_causal_lm(tokenizer,model,device,sent):
         if pos==0:
             continue
         sent_logprob[pos-1] = logprobs[0][pos-1][token]
-    return np.sum(sent_logprob)
+    return np.sum(sent_logprob).item()
 
 def eval_model_linzen(data_path,tokenizer,model,device,num_samples=None,shuffle=True,max_length=None):
     head,text = load_linzen(data_path)
