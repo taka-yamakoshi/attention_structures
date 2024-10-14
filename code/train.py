@@ -113,7 +113,8 @@ if __name__=='__main__':
             if args.model_type=='gpt2':
                 args.tokenizer = AutoTokenizer.from_pretrained('gpt2', cache_dir=args.cache_dir)
             elif args.model_type=='llama2':
-                args.tokenizer = AutoTokenizer.from_pretrained('meta-llama/Llama-2-7b-hf', cache_dir=args.cache_dir)
+                args.tokenizer = AutoTokenizer.from_pretrained('meta-llama/Llama-2-7b-hf',
+                                                               cache_dir=args.cache_dir, token=os.environ.get('HF_TOKEN'))
             else:
                 raise NotImplementedError
     assert args.model_type in ['gpt2','llama2']
