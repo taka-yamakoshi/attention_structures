@@ -64,12 +64,14 @@ if __name__=='__main__':
     zorro_tasks = ['agreement_determiner_noun-across_1_adjective','agreement_determiner_noun-between_neighbors']
 
     # When using a pretrained model, make sure to specify a fixed max length
-    if args.pretrained_model_name is not None:
-        assert args.max_length is not None
+    if args.graph_type in ['nback','tree']:
+        if args.pretrained_model_name is not None:
+            assert args.max_length is not None
+        else:
+            assert args.model_type in ['gpt2','llama2']
+            args.max_length = args.seq_len + 1 # add eos_token for GPT2 or LLaMa2
     else:
-        assert args.max_length is None
-        assert args.model_type in ['gpt2','llama2']
-        args.max_length = args.seq_len + 1 # add eos_token for GPT2 or LLaMa2
+        assert args.max_length is not None
 
     # Initialize weights and biases with args
     import wandb
