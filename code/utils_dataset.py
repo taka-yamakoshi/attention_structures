@@ -36,6 +36,13 @@ def load_sentences(args):
 def get_data_loaders(args):
     # Load the dataset and the data collator
     dataset = load_sentences(args)
+    if args.graph_type == 'babylm':
+        dataset['trn'] = dataset['trn'].shuffle(seed=args.run_seed)
+        dataset['val'] = dataset['val'].shuffle(seed=args.run_seed)
+        dataset['tst'] = dataset['tst'].shuffle(seed=args.run_seed)
+    else:
+        print('CAUTION: current setup does not shuffle the order of inputs in the datasets')
+
     dataset['trn'] = dataset['trn'].filter(lambda example, idx: idx < args.datasize, with_indices=True)
     dataset['val'] = dataset['val'].filter(lambda example, idx: idx < 10000, with_indices=True)
     dataset['tst'] = dataset['tst'].filter(lambda example, idx: idx < 10000, with_indices=True)
