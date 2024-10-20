@@ -12,16 +12,13 @@ from utils_attn_loss import calc_faiss_index, get_templates, calc_attn_loss_nbac
 from utils_eval import evaluate, evaluate_linzen, evaluate_blimp, evaluate_zorro
 
 def gen_scheduler(optimizer, args):
-    num_steps = args.num_epochs*math.ceil(args.datasize/args.batchsize_trn)
     if args.scheduler_type=='linear':
-        scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1.0, end_factor=0.0, total_iters=num_steps)
+        scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1.0, end_factor=0.0, total_iters=args.num_steps)
     elif args.scheduler_type=='constant':
-        scheduler = torch.optim.lr_scheduler.ConstantLR(optimizer, factor=1.0, total_iters=num_steps)
-    elif args.scheduler_type=='exponential':
-        scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95)
+        scheduler = torch.optim.lr_scheduler.ConstantLR(optimizer, factor=1.0, total_iters=args.num_steps)
     elif args.scheduler_type=='cosine':
-        T_max = max(num_steps//10,10000)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=T_max)
+        T_0 = args.num_steps//args.num_epochs
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=T_0)
     else:
         raise NotImplementedError
     return scheduler
@@ -60,8 +57,9 @@ if __name__=='__main__':
     args = parser.parse_args()
     print(f'running with {args}')
 
-    blimp_tasks = ['distractor_agreement_relational_noun','distractor_agreement_relative_clause']
-    zorro_tasks = ['agreement_determiner_noun-across_1_adjective','agreement_determiner_noun-between_neighbors']
+    #blimp_tasks = ['distractor_agreement_relational_noun','distractor_agreement_relative_clause']
+    zorro_tasks = ['agreement_determiner_noun-across_1_adjective','agreement_determiner_noun-between_neighbors',
+                   'filler-gap-wh_question_object','filler-gap-wh_question_subject']
 
     # When using a pretrained model, make sure to specify a fixed max length
     if args.graph_type in ['nback','tree']:
@@ -132,6 +130,8 @@ if __name__=='__main__':
         pretrained_model = None
 
     dataset, data_collator, val_loaders, tst_loaders = get_data_loaders(args)
+    args.num_steps = args.num_epochs*math.ceil(len(dataset['trn'])/args.batchsize_trn)
+    print(args.num_steps)
 
     # Load the model
     config = load_config(args.model_type,args)
@@ -162,10 +162,10 @@ if __name__=='__main__':
                     for i, loss in enumerate(val_attn_loss)},step=step_id)
     if args.graph_type.startswith('babylm'):
         out_linzen = evaluate_linzen(model, args, num_samples=100)
-        out_blimp = evaluate_blimp(model, args, blimp_tasks, num_samples=100)
+        #out_blimp = evaluate_blimp(model, args, blimp_tasks, num_samples=100)
         out_zorro = evaluate_zorro(model, args, zorro_tasks, num_samples=100)
         wandb.log(data=out_linzen, step=step_id)
-        wandb.log(data=out_blimp, step=step_id)
+        #wandb.log(data=out_blimp, step=step_id)
         wandb.log(data=out_zorro, step=step_id)
     model.save_pretrained(f"{args.base_dir}/models/{args.run_name}/ckpt-{step_id}")
 
@@ -226,10 +226,10 @@ if __name__=='__main__':
                             for i, loss in enumerate(val_attn_loss)},step=step_id)
             if args.graph_type.startswith('babylm'):
                 out_linzen = evaluate_linzen(model, args, num_samples=100)
-                out_blimp = evaluate_blimp(model, args, blimp_tasks, num_samples=100)
+                #out_blimp = evaluate_blimp(model, args, blimp_tasks, num_samples=100)
                 out_zorro = evaluate_zorro(model, args, zorro_tasks, num_samples=100)
                 wandb.log(data=out_linzen, step=step_id)
-                wandb.log(data=out_blimp, step=step_id)
+                #wandb.log(data=out_blimp, step=step_id)
                 wandb.log(data=out_zorro, step=step_id)
             model.save_pretrained(f"{args.base_dir}/models/{args.run_name}/ckpt-{step_id}")
             val_loss = np.mean(val_main_loss)+args.beta*np.mean(val_attn_loss)
@@ -245,10 +245,10 @@ if __name__=='__main__':
     wandb.log(data={f'test-last/tst-attn-{i+1}':loss for i, loss in enumerate(tst_attn_loss)})
     if args.graph_type.startswith('babylm'):
         out_linzen = evaluate_linzen(model, args)
-        out_blimp = evaluate_blimp(model, args, blimp_tasks)
+        #out_blimp = evaluate_blimp(model, args, blimp_tasks)
         out_zorro = evaluate_zorro(model, args, zorro_tasks)
         wandb.log(data=out_linzen, step=step_id)
-        wandb.log(data=out_blimp, step=step_id)
+        #wandb.log(data=out_blimp, step=step_id)
         wandb.log(data=out_zorro, step=step_id)
 
     model = AutoModelForCausalLM.from_pretrained(f"{args.base_dir}/models/{args.run_name}/best")
@@ -260,8 +260,8 @@ if __name__=='__main__':
     wandb.log(data={f'test-best/tst-attn-{i+1}':loss for i, loss in enumerate(tst_attn_loss)})
     if args.graph_type.startswith('babylm'):
         out_linzen = evaluate_linzen(model, args)
-        out_blimp = evaluate_blimp(model, args, blimp_tasks)
+        #out_blimp = evaluate_blimp(model, args, blimp_tasks)
         out_zorro = evaluate_zorro(model, args, zorro_tasks)
         wandb.log(data=out_linzen, step=step_id)
-        wandb.log(data=out_blimp, step=step_id)
+        #wandb.log(data=out_blimp, step=step_id)
         wandb.log(data=out_zorro, step=step_id)
