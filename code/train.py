@@ -131,7 +131,7 @@ if __name__=='__main__':
 
     dataset, data_collator, val_loaders, tst_loaders = get_data_loaders(args)
     args.num_steps = args.num_epochs*math.ceil(len(dataset['trn'])/args.batchsize_trn)
-    print(args.num_steps)
+    print(f'{args.num_steps} steps')
 
     # Load the model
     config = load_config(args.model_type,args)
@@ -161,9 +161,9 @@ if __name__=='__main__':
     wandb.log(data={f'validation/val-attn-{i+1}':loss
                     for i, loss in enumerate(val_attn_loss)},step=step_id)
     if args.graph_type.startswith('babylm'):
-        out_linzen = evaluate_linzen(model, args, num_samples=100)
-        #out_blimp = evaluate_blimp(model, args, blimp_tasks, num_samples=100)
-        out_zorro = evaluate_zorro(model, args, zorro_tasks, num_samples=100)
+        out_linzen = evaluate_linzen(model, args, num_samples=1000)
+        #out_blimp = evaluate_blimp(model, args, blimp_tasks, num_samples=1000)
+        out_zorro = evaluate_zorro(model, args, zorro_tasks, num_samples=1000)
         wandb.log(data=out_linzen, step=step_id)
         #wandb.log(data=out_blimp, step=step_id)
         wandb.log(data=out_zorro, step=step_id)
@@ -225,9 +225,9 @@ if __name__=='__main__':
             wandb.log(data={f'validation/val-attn-{i+1}':loss
                             for i, loss in enumerate(val_attn_loss)},step=step_id)
             if args.graph_type.startswith('babylm'):
-                out_linzen = evaluate_linzen(model, args, num_samples=100)
-                #out_blimp = evaluate_blimp(model, args, blimp_tasks, num_samples=100)
-                out_zorro = evaluate_zorro(model, args, zorro_tasks, num_samples=100)
+                out_linzen = evaluate_linzen(model, args, num_samples=1000)
+                #out_blimp = evaluate_blimp(model, args, blimp_tasks, num_samples=1000)
+                out_zorro = evaluate_zorro(model, args, zorro_tasks, num_samples=1000)
                 wandb.log(data=out_linzen, step=step_id)
                 #wandb.log(data=out_blimp, step=step_id)
                 wandb.log(data=out_zorro, step=step_id)
