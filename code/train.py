@@ -105,16 +105,13 @@ if __name__=='__main__':
         # Load the tokenizer for all trees
         args.tokenizer = AutoTokenizer.from_pretrained(f'{args.base_dir}/tokenizers/{args.model_type}_tree-all_{args.vocab_size}_{args.max_prob}_{args.seq_len}_{args.seed}')
     else:
-        if args.pretrained_model_name is not None:
-            args.tokenizer = AutoTokenizer.from_pretrained(args.pretrained_model_name, cache_dir=args.cache_dir)
+        if args.model_type=='gpt2':
+            args.tokenizer = AutoTokenizer.from_pretrained('gpt2', cache_dir=args.cache_dir)
+        elif args.model_type=='llama2':
+            args.tokenizer = AutoTokenizer.from_pretrained('meta-llama/Llama-2-7b-hf',
+                                                            cache_dir=args.cache_dir, token=os.environ.get('HF_TOKEN'))
         else:
-            if args.model_type=='gpt2':
-                args.tokenizer = AutoTokenizer.from_pretrained('gpt2', cache_dir=args.cache_dir)
-            elif args.model_type=='llama2':
-                args.tokenizer = AutoTokenizer.from_pretrained('meta-llama/Llama-2-7b-hf',
-                                                               cache_dir=args.cache_dir, token=os.environ.get('HF_TOKEN'))
-            else:
-                raise NotImplementedError
+            raise NotImplementedError
     assert args.model_type in ['gpt2','llama2']
     args.tokenizer.pad_token = args.tokenizer.eos_token
 
