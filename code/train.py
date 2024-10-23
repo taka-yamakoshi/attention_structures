@@ -120,7 +120,7 @@ if __name__=='__main__':
 
     # Load the model if necessary
     if args.bias=='direct':
-        if args.graph_type.startswith('nback') or args.graph_type.startswith('tree'):
+        if args.graph_type.startswith('nback') or args.graph_type.startswith('tree') or args.pretrained_model_name.startswith('llama2'):
             pretrained_model = AutoModelForCausalLM.from_pretrained(f'{args.base_dir}/models/{args.pretrained_model_name}/best')
         else:
             pretrained_model = AutoModelForCausalLM.from_pretrained(args.pretrained_model_name, cache_dir=args.cache_dir)
