@@ -64,4 +64,4 @@ if __name__=='__main__':
         tasks.append(key)
         perfs.append(val)
     df = pd.DataFrame.from_dict({'tasks': tasks, 'acc': perfs})
-    df.to_csv(f'./results/{args.model_name}.csv', index=False)
+    df.to_csv(f'../results/{args.model_name}.csv', index=False)
