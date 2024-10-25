@@ -222,6 +222,12 @@ def evaluate_linzen(model, args, num_samples=None):
     df_group = df.filter(['num_attr','acc']).groupby(['num_attr'],as_index=False).mean()
     return {f'eval/linzen_test_{num_attr}':df_group.loc[lambda d: d['num_attr']==str(num_attr)]['acc'].item() for num_attr in range(5)}
 
+def evaluate_linzen_agg(model, args, num_samples=None):
+    df = eval_model_linzen('../colorlessgreenRNNs/data/linzen_testset',
+                           args.tokenizer,model,args.device,
+                           num_samples=num_samples,max_length=args.max_length)
+    return {'eval/linzen_test':df['acc'].mean()}
+
 def evaluate_blimp(model, args, tasks, num_samples=None):
     out = {}
     for task in tasks:
