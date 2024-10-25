@@ -13,6 +13,7 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_name', type = str, default=None)
     parser.add_argument('--max_length', type = int, default=None)
+    parser.add_argument('--run_seed', type = int, default=1234)
     parser.add_argument('--core_id', type = int, default = 0)
     args = parser.parse_args()
     print(f'running with {args}')
