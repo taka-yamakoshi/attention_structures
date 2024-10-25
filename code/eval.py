@@ -48,7 +48,7 @@ if __name__=='__main__':
     blimp_prefix = '../blimp/data'
     blimp_tasks = [file.replace(blimp_prefix+'/','').replace('.jsonl','') for file in glob.glob(f'{blimp_prefix}/*.jsonl')]
     zorro_prefix = '../Zorro/sentences/babyberta'
-    zorro_tasks = [file.replace(blimp_prefix+'/','').replace('.txt','') for file in glob.glob(f'{zorro_prefix}/*.txt')]
+    zorro_tasks = [file.replace(zorro_prefix+'/','').replace('.txt','') for file in glob.glob(f'{zorro_prefix}/*.txt')]
     out_linzen = evaluate_linzen_agg(model, args)
     out_blimp = evaluate_blimp(model, args, blimp_tasks)
     out_zorro = evaluate_zorro(model, args, zorro_tasks)
