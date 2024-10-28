@@ -107,7 +107,7 @@ if __name__=='__main__':
                 model = AutoModelForCausalLM.from_pretrained('meta-llama/Llama-2-7b-hf',
                                                              cache_dir=args.cache_dir, token=os.environ.get('HF_TOKEN'))
         else:
-            model = AutoModelForCausalLM.from_pretrained(f"{args.base_dir}/models/{args.pretrained_model}/best")
+            model = AutoModelForCausalLM.from_pretrained(f"{args.base_dir}/models/{args.pretrained_model_name}/best")
     else:
         model = AutoModelForCausalLM.from_pretrained(f"{args.base_dir}/models/{args.run_name}/best")
     model.to(args.device)
