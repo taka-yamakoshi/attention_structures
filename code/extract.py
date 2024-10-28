@@ -85,7 +85,11 @@ if __name__=='__main__':
 
     # Load the tokenizer
     if args.pretrained_model_name is not None:
-        args.tokenizer = AutoTokenizer.from_pretrained(args.pretrained_model_name, cache_dir=args.cache_dir)
+        if args.pretrained_model_name.startswith('gpt2'):
+            args.tokenizer = AutoTokenizer.from_pretrained('gpt2', cache_dir=args.cache_dir)
+        elif args.pretrained_model_name.startswith('llama2'):
+            args.tokenizer = AutoTokenizer.from_pretrained('meta-llama/Llama-2-7b-hf',
+                                                           cache_dir=args.cache_dir, token=os.environ.get('HF_TOKEN'))
     else:
         args.tokenizer = AutoTokenizer.from_pretrained(f'{args.base_dir}/tokenizers/{args.model_type}_tree-all_{args.vocab_size}_{args.max_prob}_{args.seq_len}_{args.seed}')
     args.tokenizer.pad_token = args.tokenizer.eos_token
@@ -95,7 +99,15 @@ if __name__=='__main__':
 
     # Load the model
     if args.pretrained_model_name is not None:
-        model = AutoModelForCausalLM.from_pretrained(args.pretrained_model_name, cache_dir=args.cache_dir)
+        if args.pretrained_model_name in ['gpt2','gpt2-medium','gpt2-large','llama2']:
+            if args.pretrained_model_name.startswith('gpt2'):
+                model = AutoModelForCausalLM.from_pretrained(args.pretrained_model_name, cache_dir=args.cache_dir)
+            else:
+                assert args.pretarined_model_name=='llama2'
+                model = AutoModelForCausalLM.from_pretrained('meta-llama/Llama-2-7b-hf',
+                                                             cache_dir=args.cache_dir, token=os.environ.get('HF_TOKEN'))
+        else:
+            model = AutoModelForCausalLM.from_pretrained(f"{args.base_dir}/models/{args.pretrained_model}/best")
     else:
         model = AutoModelForCausalLM.from_pretrained(f"{args.base_dir}/models/{args.run_name}/best")
     model.to(args.device)
@@ -106,6 +118,8 @@ if __name__=='__main__':
     elif args.graph_type=='babylm':
         if model.config.model_type=='gpt2':
             nlayers, nheads = model.config.n_layer, model.config.n_head
+        elif model.config.model_type=='llama':
+            nlayers, nheads = model.config.num_hidden_layers, model.config.num_attention_heads
         else:
             raise NotImplementedError
     num_sents = 0
