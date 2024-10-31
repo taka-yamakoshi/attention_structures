@@ -82,7 +82,11 @@ def calc_faiss_index(args):
         xb = xb.astype('float32')
         _, d = xb.shape
 
-        faiss_index = faiss.index_factory(d, "PCA256,HNSW32,Flat")
+        if args.graph_type in ['tree','nback']:
+            red_dim = 256
+        else:
+            red_dim = 512
+        faiss_index = faiss.index_factory(d, f"PCA{red_dim},HNSW32,Flat")
         faiss_index.train(xb)
         faiss_index.add(xb)
         index_list.append(faiss_index)
