@@ -3,6 +3,7 @@ import torch
 import argparse
 import os
 import math
+import time
 
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
@@ -167,6 +168,7 @@ if __name__=='__main__':
     model.save_pretrained(f"{args.base_dir}/models/{args.run_name}/ckpt-{step_id}")
 
     best_val_loss = np.inf
+    print(f'Started training at {time.ctime()}')
     for epoch in range(args.num_epochs):
         model.train()
         dataset['trn'] = dataset['trn'].shuffle(seed=args.run_seed+epoch)
