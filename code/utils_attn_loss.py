@@ -69,7 +69,7 @@ def load_attns(args):
 def calc_faiss_index(args):
     import faiss
     attns = load_attns(args)
-    attns = adjust_layer_assignment(attns, args.num_layers)
+    #attns = adjust_layer_assignment(attns, args.num_layers) # consumes to much memory
     # attns.shape = (batch_size, nlayers, nheads, seqlen, seqlen)
     assert len(attns.shape)==5
     index_list = []
