@@ -15,7 +15,11 @@ def gen_dataset_name(args):
 
 def gen_run_name(args):
     model_stat = f'{args.num_layers}_{args.num_heads}_{args.hidden_size}_{args.intermediate_size}'
-    run_stat = f'{args.bias}_{args.beta}_{args.datasize}_{args.batchsize_trn}_{args.batchsize_val}_{args.lr}_{args.scheduler_type}_{args.num_epochs}_{args.run_seed}'
+    if args.pretrained_model_name is not None:
+        bias_stat = f'{args.bias}_{args.pretrained_model_name}_{args.beta}'
+    else:
+        bias_stat = f'{args.bias}_{args.beta}'
+    run_stat = f'{bias_stat}_{args.datasize}_{args.batchsize_trn}_{args.batchsize_val}_{args.lr}_{args.scheduler_type}_{args.num_epochs}_{args.run_seed}'
     return f'{args.model_type}_{gen_dataset_name(args)}_{model_stat}_{run_stat}'
 
 def gen_run_name_key_amp(args):

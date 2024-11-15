@@ -114,7 +114,7 @@ def calc_attn_loss_faiss(args, index_list, xb_list, attns, layer_ids):
         assert attn.shape[0]==xn.shape[0] and attn.shape[1]==xn.shape[2]
 
         # dist.shape = (batchsize*nheads, neighbors)
-        dist = torch.sqrt(((attn.unsqueeze(1)-xn)**2).sum(dim=-1))
+        dist = torch.sqrt(((attn.unsqueeze(1)-xn)**2).sum(dim=-1)+1e-10)
 
         min_dist = -torch.logsumexp(-dist, dim=1)
         attn_loss += torch.mean(min_dist)
