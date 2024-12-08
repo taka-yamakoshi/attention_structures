@@ -64,16 +64,21 @@ def load_attns(args):
             loaded_attns = np.load(attns_path)
             attns.append(loaded_attns)
         attns = np.concatenate(attns, axis=0)
+    print('Finished Loading')
     return attns
 
 def calc_faiss_index(args):
     import faiss
     attns = load_attns(args)
-    #attns = adjust_layer_assignment(attns, args.num_layers) # consumes to much memory
+    #attns = adjust_layer_assignment(attns, args.num_layers) # consumes too much memory
     # attns.shape = (batch_size, nlayers, nheads, seqlen, seqlen)
     assert len(attns.shape)==5
     index_list = []
     xb_list = []
+    if args.graph_type in ['tree','nback']:
+        red_dim = 256
+    else:
+        red_dim = 512
     for layer_id in range(args.num_layers):
         xb = attns[:,layer_id,:,:,:]
         xb = xb.reshape((xb.shape[0]*xb.shape[1],xb.shape[2]*xb.shape[3]))
@@ -82,7 +87,8 @@ def calc_faiss_index(args):
         xb = xb.astype('float32')
         _, d = xb.shape
 
-        faiss_index = faiss.index_factory(d, f"IVF{args.nlist},SQfp16")
+        print('Creating Index')
+        faiss_index = faiss.index_factory(d, f"PCA{red_dim},IVF{args.nlist},SQfp16")
         faiss_index.train(xb)
         faiss_index.add(xb)
         faiss_index.nprobe = args.nprobe
