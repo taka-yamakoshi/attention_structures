@@ -75,17 +75,6 @@ if __name__=='__main__':
     else:
         assert args.max_length is not None
 
-    # Load and train the faiss index
-    # This is the most RAM-intensive part
-    if args.bias not in ['nobias','direct']:
-        args.faiss_index_name = f"IVF{args.nlist}SQfp16-{args.nprobe}-{args.nneighbors}"
-        if args.graph_type.startswith('tree') or args.graph_type.startswith('babylm'):
-            index_list, xb_list = calc_faiss_index(args)
-        else:
-            index_list, xb_list = None, None
-    else:
-        index_list, xb_list = None, None
-
     # Initialize weights and biases with args
     import wandb
     wandb.login(key=os.environ.get("WANDB_KEY"))
@@ -111,6 +100,17 @@ if __name__=='__main__':
     # Fix the seed
     seed_everything(args.run_seed)
     args.rng = np.random.default_rng(args.run_seed)
+
+    # Load and train the faiss index
+    # This is the most RAM-intensive part
+    if args.bias not in ['nobias','direct']:
+        args.faiss_index_name = f"IVF{args.nlist}SQfp16-{args.nprobe}-{args.nneighbors}"
+        if args.graph_type.startswith('tree') or args.graph_type.startswith('babylm'):
+            index_list, xb_list = calc_faiss_index(args)
+        else:
+            index_list, xb_list = None, None
+    else:
+        index_list, xb_list = None, None
 
     # Load the tokenizer
     if args.graph_type.startswith('nback'):
