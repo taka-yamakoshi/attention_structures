@@ -90,6 +90,11 @@ if __name__=='__main__':
     # Set the device
     args.device = torch.device("cuda", index=int(args.core_id))
 
+    # Create faiss index name
+    if args.bias not in ['nobias','direct']:
+        if args.graph_type.startswith('tree') or args.graph_type.startswith('babylm'):
+            args.faiss_index_name = f"IVF{args.nlist}SQfp16-{args.nprobe}-{args.nneighbors}"
+
     # Generate the dataset name and the run name
     if args.dataset_name is None:
         args.dataset_name = gen_dataset_name(args)
@@ -104,7 +109,6 @@ if __name__=='__main__':
     # Load and train the faiss index
     # This is the most RAM-intensive part
     if args.bias not in ['nobias','direct']:
-        args.faiss_index_name = f"IVF{args.nlist}SQfp16-{args.nprobe}-{args.nneighbors}"
         if args.graph_type.startswith('tree') or args.graph_type.startswith('babylm'):
             index_list, xb_list = calc_faiss_index(args)
         else:
