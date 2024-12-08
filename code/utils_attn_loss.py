@@ -112,7 +112,7 @@ def calc_attn_loss_faiss(args, index_list, xb_list, attns, layer_ids):
 
         # xn.shape = (batchsize*nheads, neighbors, seqlen*seqlen)
         xn = torch.tensor(np.array([[xb[sample_id] for sample_id in line] for line in I]),device=args.device)
-        assert len(xn.shape)==3 and xn.shape[1]==args.num_neighbors
+        assert len(xn.shape)==3 and xn.shape[1]==args.nneighbors
 
         # attn.shape = (batchsize*nheads, seqlen*seqlen)
         attn = attn.view(attn.shape[0]*attn.shape[1],attn.shape[2]*attn.shape[3])
