@@ -11,7 +11,11 @@ def seed_everything(seed):
     torch.backends.cudnn.benchmark = False
 
 def gen_dataset_name(args):
-    return f'{args.graph_type}_{args.vocab_size}_{args.max_prob}_{args.seq_len}_{args.seed}'
+    if args.graph_type.startswith('nback') or args.graph_type.startswith('tree'):
+        return f'{args.graph_type}_{args.vocab_size}_{args.max_prob}_{args.seq_len}_{args.seed}'
+    else:
+        assert args.graph_type=='babylm'
+        return f'{args.graph_type}_{args.max_length}'
 
 def gen_run_name(args):
     model_stat = f'{args.num_layers}_{args.num_heads}_{args.hidden_size}_{args.intermediate_size}'
@@ -19,6 +23,8 @@ def gen_run_name(args):
         bias_stat = f'{args.bias}_{args.pretrained_model_name}_{args.beta}'
     else:
         bias_stat = f'{args.bias}_{args.beta}'
+    if args.bias not in ['nobias','direct']:
+        bias_stat += f'_faiss_{args.faiss_index_name}'
     run_stat = f'{bias_stat}_{args.datasize}_{args.batchsize_trn}_{args.batchsize_val}_{args.lr}_{args.scheduler_type}_{args.num_epochs}_{args.run_seed}'
     return f'{args.model_type}_{gen_dataset_name(args)}_{model_stat}_{run_stat}'
 

@@ -44,7 +44,10 @@ if __name__=='__main__':
     parser.add_argument('--datasize', type = int, default = 1000)
     parser.add_argument('--bias', type = str, default = 'nobias')
     parser.add_argument('--beta', type = float, default = 0.1)
-    parser.add_argument('--num_neighbors', type = int, default = 100)
+    parser.add_argument('--nlist', type = int, default = 4096, choices=[4096,8192],
+                        help="number of clusters/cells, see https://github.com/facebookresearch/faiss/wiki/Guidelines-to-choose-an-index#if-below-1m-vectors-ivfk")
+    parser.add_argument('--nprobe', type = int, default = 16, help="number of cluseters/cells to visit to find the neighbors")
+    parser.add_argument('--nneighbors', type = int, default = 64, help="number of neighbors used to calcualte the loss")
 
     parser.add_argument('--batchsize_trn', type = int, default = 10)
     parser.add_argument('--batchsize_val', type = int, default = 100)
@@ -71,6 +74,17 @@ if __name__=='__main__':
             args.max_length = args.seq_len + 1 # add eos_token for GPT2 or LLaMa2
     else:
         assert args.max_length is not None
+
+    # Load and train the faiss index
+    # This is the most RAM-intensive part
+    if args.bias not in ['nobias','direct']:
+        args.faiss_index_name = f"IVF{args.nlist}SQfp16-{args.nprobe}-{args.nneighbors}"
+        if args.graph_type.startswith('tree') or args.graph_type.startswith('babylm'):
+            index_list, xb_list = calc_faiss_index(args)
+        else:
+            index_list, xb_list = None, None
+    else:
+        index_list, xb_list = None, None
 
     # Initialize weights and biases with args
     import wandb
@@ -136,15 +150,6 @@ if __name__=='__main__':
     model = AutoModelForCausalLM.from_config(config)
     model.resize_token_embeddings(len(args.tokenizer))
     model.to(args.device)
-
-    # Train the faiss index
-    if args.bias not in ['nobias','direct']:
-        if args.graph_type.startswith('tree') or args.graph_type.startswith('babylm'):
-            index_list, xb_list = calc_faiss_index(args)
-        else:
-            index_list, xb_list = None, None
-    else:
-        index_list, xb_list = None, None
 
     # Create the optimizer and the scheduler
     optimizer = torch.optim.AdamW(model.parameters(),lr=args.lr)

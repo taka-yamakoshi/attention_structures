@@ -82,15 +82,13 @@ def calc_faiss_index(args):
         xb = xb.astype('float32')
         _, d = xb.shape
 
-        if args.graph_type in ['tree','nback']:
-            red_dim = 256
-        else:
-            red_dim = 512
-        faiss_index = faiss.index_factory(d, f"PCA{red_dim},HNSW32,Flat")
+        faiss_index = faiss.index_factory(d, f"IVF{args.nlist},SQfp16")
         faiss_index.train(xb)
         faiss_index.add(xb)
+        faiss_index.nprobe = args.nprobe
         index_list.append(faiss_index)
         xb_list.append(xb)
+    del attns
     return index_list, xb_list
 
 def calc_attn_loss_faiss(args, index_list, xb_list, attns, layer_ids):
@@ -99,11 +97,12 @@ def calc_attn_loss_faiss(args, index_list, xb_list, attns, layer_ids):
     for layer_id in layer_ids:
         attn = attns[layer_id]
         faiss_index = index_list[layer_id]
+        print(faiss_index.nprobe)
         xb = xb_list[layer_id]
         assert len(attn.shape)==4
         xq = attn.clone().detach().cpu().numpy().astype('float32')
         xq = xq.reshape((xq.shape[0]*xq.shape[1],xq.shape[2]*xq.shape[3]))
-        _, I = faiss_index.search(xq, args.num_neighbors)
+        _, I = faiss_index.search(xq, args.nneighbors)
 
         # xn.shape = (batchsize*nheads, neighbors, seqlen*seqlen)
         xn = torch.tensor(np.array([[xb[sample_id] for sample_id in line] for line in I]),device=args.device)
