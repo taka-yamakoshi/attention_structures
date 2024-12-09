@@ -95,10 +95,12 @@ def calc_faiss_index(args):
     #attns = adjust_layer_assignment(attns, args.num_layers) # consumes too much memory
     # attns.shape = (batch_size, nlayers, nheads, seqlen, seqlen)
     assert len(attns.shape)==5
-    pool_args = [(attns[:,layer_id,:,:,:], args) for layer_id in range(args.num_layers)]
-    with Pool(processes=4) as p:
-        results = p.starmap(create_index_job,pool_args)
-    index_list, xb_list = zip(*results)
+    index_list = []
+    xb_list = []
+    for layer_id in range(args.num_layers):
+        faiss_index, xb = create_index_job(attns[:,layer_id,:,:,:], args)
+        index_list.append(faiss_index)
+        xb_list.append(xb)
     return index_list, xb_list
 
 def calc_attn_loss_faiss(args, index_list, xb_list, attns, layer_ids):
