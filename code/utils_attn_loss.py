@@ -1,5 +1,8 @@
 import numpy as np
 import torch
+import glob
+import faiss
+from multiprocessing import Pool
 #import ot
 
 def get_template_nback(n:int, seq_len:int, batch_size:int, num_heads:int):
@@ -61,8 +64,6 @@ def load_attns(args):
         attns_path = f'{args.base_dir}/attns/{args.pretrained_model_name}/attns.npy'
         attns = np.load(attns_path)
     else:
-        from multiprocessing import Pool
-        import glob
         pool_args = [(i, path) for i, path in enumerate(glob.glob(f'{args.base_dir}/attns/{args.pretrained_model_name}/attns_*.npy'))]
         with Pool(processes=16) as p:
             attns = p.starmap(load_attn_job,pool_args)
@@ -70,35 +71,30 @@ def load_attns(args):
     print('Finished Loading')
     return attns
 
+def create_index_job(xb, args):
+    xb = xb.reshape((xb.shape[0]*xb.shape[1],xb.shape[2]*xb.shape[3]))
+    rand_ids = args.rng.permutation(xb.shape[0])
+    xb = xb[rand_ids]
+    xb = xb.astype('float32')
+    _, d = xb.shape
+
+    print('Creating Index')
+    #faiss_index = faiss.index_factory(d, f"PCA{red_dim},IVF{args.nlist},SQ8")
+    faiss_index = faiss.index_factory(d, f"OPQ16_64,IVF{args.nlist},PQ16x4fsr")
+    faiss_index.train(xb)
+    faiss_index.add(xb)
+    faiss_index.nprobe = args.nprobe
+    return faiss_index, xb
+
 def calc_faiss_index(args):
-    import faiss
     attns = load_attns(args)
     #attns = adjust_layer_assignment(attns, args.num_layers) # consumes too much memory
     # attns.shape = (batch_size, nlayers, nheads, seqlen, seqlen)
     assert len(attns.shape)==5
-    index_list = []
-    xb_list = []
-    if args.graph_type in ['tree','nback']:
-        red_dim = 256
-    else:
-        red_dim = 512
-    for layer_id in range(args.num_layers):
-        xb = attns[:,layer_id,:,:,:]
-        xb = xb.reshape((xb.shape[0]*xb.shape[1],xb.shape[2]*xb.shape[3]))
-        rand_ids = args.rng.permutation(xb.shape[0])
-        xb = xb[rand_ids]
-        xb = xb.astype('float32')
-        _, d = xb.shape
-
-        print('Creating Index')
-        #faiss_index = faiss.index_factory(d, f"PCA{red_dim},IVF{args.nlist},SQ8")
-        faiss_index = faiss.index_factory(d, f"OPQ16_64,IVF{args.nlist},PQ16x4fsr")
-        faiss_index.train(xb)
-        faiss_index.add(xb)
-        faiss_index.nprobe = args.nprobe
-        index_list.append(faiss_index)
-        xb_list.append(xb)
-    del attns
+    pool_args = [(attns[:,layer_id,:,:,:], args) for layer_id in range(args.num_layers)]
+    with Pool(processes=8) as p:
+        results = p.starmap(create_index_job,pool_args)
+    index_list, xb_list = zip(*results)
     return index_list, xb_list
 
 def calc_attn_loss_faiss(args, index_list, xb_list, attns, layer_ids):
