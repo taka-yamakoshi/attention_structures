@@ -96,7 +96,7 @@ def calc_faiss_index(args):
     # attns.shape = (batch_size, nlayers, nheads, seqlen, seqlen)
     assert len(attns.shape)==5
     pool_args = [(attns[:,layer_id,:,:,:], args) for layer_id in range(args.num_layers)]
-    with Pool(processes=8) as p:
+    with Pool(processes=4) as p:
         results = p.starmap(create_index_job,pool_args)
     index_list, xb_list = zip(*results)
     return index_list, xb_list
