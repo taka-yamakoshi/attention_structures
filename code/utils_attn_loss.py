@@ -52,17 +52,20 @@ def adjust_layer_assignment(attns, nlayers_new):
     del attns
     return new_attns
 
+def load_attn_job(job_id, path):
+    print(f"Loading File{job_id}")
+    return np.load(path)
+
 def load_attns(args):
     if args.graph_type.startswith('tree') or args.graph_type.startswith('nback'):
         attns_path = f'{args.base_dir}/attns/{args.pretrained_model_name}/attns.npy'
         attns = np.load(attns_path)
     else:
+        from multiprocessing import Pool
         import glob
-        attns_path_list = glob.glob(f'{args.base_dir}/attns/{args.pretrained_model_name}/attns_*.npy')
-        attns = []
-        for attns_path in attns_path_list:
-            loaded_attns = np.load(attns_path)
-            attns.append(loaded_attns)
+        pool_args = [(i, path) for i, path in enumerate(glob.glob(f'{args.base_dir}/attns/{args.pretrained_model_name}/attns_*.npy'))]
+        with Pool(processes=100) as p:
+            attns = p.starmap(load_attn_job,pool_args)
         attns = np.concatenate(attns, axis=0)
     print('Finished Loading')
     return attns
