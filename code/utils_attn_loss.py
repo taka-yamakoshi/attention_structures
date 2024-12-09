@@ -64,7 +64,7 @@ def load_attns(args):
         from multiprocessing import Pool
         import glob
         pool_args = [(i, path) for i, path in enumerate(glob.glob(f'{args.base_dir}/attns/{args.pretrained_model_name}/attns_*.npy'))]
-        with Pool(processes=100) as p:
+        with Pool(processes=16) as p:
             attns = p.starmap(load_attn_job,pool_args)
         attns = np.concatenate(attns, axis=0)
     print('Finished Loading')
