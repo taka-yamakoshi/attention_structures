@@ -91,7 +91,8 @@ def calc_faiss_index(args):
         _, d = xb.shape
 
         print('Creating Index')
-        faiss_index = faiss.index_factory(d, f"PCA{red_dim},IVF{args.nlist},SQ8")
+        #faiss_index = faiss.index_factory(d, f"PCA{red_dim},IVF{args.nlist},SQ8")
+        faiss_index = faiss.index_factory(d, f"OPQ16_64,IVF{args.nlist},PQ16x4fsr")
         faiss_index.train(xb)
         faiss_index.add(xb)
         faiss_index.nprobe = args.nprobe
