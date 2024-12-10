@@ -44,9 +44,9 @@ if __name__=='__main__':
     parser.add_argument('--datasize', type = int, default = 1000)
     parser.add_argument('--bias', type = str, default = 'nobias')
     parser.add_argument('--beta', type = float, default = 0.1)
-    parser.add_argument('--nlist', type = int, default = 4096, choices=[4096,8192],
-                        help="number of clusters/cells, see https://github.com/facebookresearch/faiss/wiki/Guidelines-to-choose-an-index#if-below-1m-vectors-ivfk")
-    parser.add_argument('--nprobe', type = int, default = 16, help="number of cluseters/cells to visit to find the neighbors")
+    #parser.add_argument('--nlist', type = int, default = 4096, choices=[4096,8192],
+    #                    help="number of clusters/cells, see https://github.com/facebookresearch/faiss/wiki/Guidelines-to-choose-an-index#if-below-1m-vectors-ivfk")
+    #parser.add_argument('--nprobe', type = int, default = 16, help="number of cluseters/cells to visit to find the neighbors")
     parser.add_argument('--nneighbors', type = int, default = 64, help="number of neighbors used to calcualte the loss")
 
     parser.add_argument('--batchsize_trn', type = int, default = 10)
@@ -93,7 +93,7 @@ if __name__=='__main__':
     # Create faiss index name
     if args.bias not in ['nobias','direct']:
         if args.graph_type.startswith('tree') or args.graph_type.startswith('babylm'):
-            args.faiss_index_name = f"IVF{args.nlist}SQfp16-{args.nprobe}-{args.nneighbors}"
+            args.faiss_index_name = f"HNSW-{args.nneighbors}"
 
     # Generate the dataset name and the run name
     if args.dataset_name is None:
