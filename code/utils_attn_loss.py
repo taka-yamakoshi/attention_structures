@@ -85,7 +85,7 @@ def create_index_job(xb, args):
         red_dim = 256
     else:
         red_dim = 512
-    faiss_index = faiss.index_factory(d, f"HNSW,Flat")
+    faiss_index = faiss.index_factory(d, f"PCA{red_dim},HNSW,Flat")
     #faiss_index = faiss.index_factory(d, f"OPQ16_64,IVF{args.nlist},PQ16x4fsr")
     #faiss_index = faiss.index_cpu_to_gpus_list(faiss_index, gpus=[1,2,3])
     faiss_index.train(xb)
