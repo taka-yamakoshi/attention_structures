@@ -3,6 +3,7 @@ import torch
 import glob
 import faiss
 from multiprocessing import Pool
+import time
 #import ot
 
 def get_template_nback(n:int, seq_len:int, batch_size:int, num_heads:int):
@@ -79,16 +80,18 @@ def create_index_job(xb, args):
     _, d = xb.shape
 
     print('Creating Index')
+    start = time.time()
     if args.graph_type in ['nback','tree']:
         red_dim = 256
     else:
         red_dim = 512
-    faiss_index = faiss.index_factory(d, f"PCA{red_dim},HNSW,Flat")
+    faiss_index = faiss.index_factory(d, f"PCA{red_dim},IVF{args.nlist}_HNSW,Flat")
     #faiss_index = faiss.index_factory(d, f"OPQ16_64,IVF{args.nlist},PQ16x4fsr")
     #faiss_index = faiss.index_cpu_to_gpus_list(faiss_index, gpus=[1,2,3])
     faiss_index.train(xb)
     faiss_index.add(xb)
     faiss_index.nprobe = args.nprobe
+    print(f'{time.time()-start}')
     return faiss_index, xb
 
 def calc_faiss_index(args):
@@ -110,7 +113,6 @@ def calc_attn_loss_faiss(args, index_list, xb_list, attns, layer_ids):
     for layer_id in layer_ids:
         attn = attns[layer_id]
         faiss_index = index_list[layer_id]
-        print(faiss_index.nprobe)
         xb = xb_list[layer_id]
         assert len(attn.shape)==4
         xq = attn.clone().detach().cpu().numpy().astype('float32')
