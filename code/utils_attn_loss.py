@@ -117,7 +117,9 @@ def calc_attn_loss_faiss(args, index_list, xb_list, attns, layer_ids):
         assert len(attn.shape)==4
         xq = attn.clone().detach().cpu().numpy().astype('float32')
         xq = xq.reshape((xq.shape[0]*xq.shape[1],xq.shape[2]*xq.shape[3]))
+        start = time.time()
         _, I = faiss_index.search(xq, args.nneighbors)
+        print(f'{time.time()-start}')
 
         # xn.shape = (batchsize*nheads, neighbors, seqlen*seqlen)
         xn = torch.tensor(np.array([[xb[sample_id] for sample_id in line] for line in I]),device=args.device)
