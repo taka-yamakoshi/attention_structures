@@ -90,7 +90,7 @@ def create_index_job(xb, args):
     #faiss_index = faiss.index_cpu_to_gpus_list(faiss_index, gpus=[1,2,3])
     faiss_index.train(xb)
     faiss_index.add(xb)
-    faiss_index.nprobe = args.nprobe
+    #faiss_index.nprobe = args.nprobe
     print(f'{time.time()-start}')
     return faiss_index, xb
 
