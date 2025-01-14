@@ -4,6 +4,7 @@ import glob
 import faiss
 from multiprocessing import Pool
 import time
+import math
 #import ot
 
 def get_template_nback(n:int, seq_len:int, batch_size:int, num_heads:int):
@@ -108,6 +109,7 @@ def calc_faiss_index(args):
     return index_list, xb_list
 
 def calc_attn_loss_faiss(args, index_list, xb_list, attns, layer_ids):
+    # xb.shape[0]=5000*20, nlayers=8, nheads=4, seqlen=64
     # attns.shape = (nlayers, batchsize, nheads, seqlen, seqlen)
     attn_loss = 0
     for layer_id in layer_ids:
@@ -125,13 +127,30 @@ def calc_attn_loss_faiss(args, index_list, xb_list, attns, layer_ids):
         xn = torch.tensor(np.array([[xb[sample_id] for sample_id in line] for line in I]),device=args.device)
         assert len(xn.shape)==3 and xn.shape[1]==args.nneighbors
 
+        # instead of comparing to all the neighbors, identify the single "central" neighbor
+        # center_vecs.shape = (batchsize*nheads, seqlen*seqlen)
+        center_vecs = calc_graph_centers(xn)
+
         # attn.shape = (batchsize*nheads, seqlen*seqlen)
         attn = attn.view(attn.shape[0]*attn.shape[1],attn.shape[2]*attn.shape[3])
         assert attn.shape[0]==xn.shape[0] and attn.shape[1]==xn.shape[2]
 
         # dist.shape = (batchsize*nheads, neighbors)
-        dist = torch.sqrt(((attn.unsqueeze(1)-xn)**2).sum(dim=-1)+1e-10)
+        #dist = torch.sqrt(((attn.unsqueeze(1)-xn)**2).sum(dim=-1)+1e-10)
+        #min_dist = -torch.logsumexp(-dist, dim=1)
 
-        min_dist = -torch.logsumexp(-dist, dim=1)
+        min_dist = torch.sqrt(torch.sum((attn-center_vecs)**2,dim=-1)+1e-10)
         attn_loss += torch.mean(min_dist)
     return attn_loss
+
+def calc_graph_centers(xn):
+    bsize = 10 # limit RAM size to ~1.5GB
+    assert len(xn.shape)==3
+    bnum = math.ceil(xn.shape[0]/bsize)
+    center_ids = []
+    for i in range(bnum):
+        a = xn[bsize*i:bsize*(i+1),:,:]
+        b = torch.sum(torch.sqrt(torch.sum((a.unsqueeze(2)-a.unsqueeze(1))**2,dim=-1)),dim=-1)
+        center_ids.append(b.argmin(dim=-1))
+    center_ids = torch.cat(center_ids)
+    return torch.stack([xn[i][cid] for i, cid in enumerate(center_ids)])

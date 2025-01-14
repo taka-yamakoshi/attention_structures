@@ -58,8 +58,13 @@ if __name__=='__main__':
     parser.add_argument('--wandb_name', type = str, default = 'attn_struct')
 
     parser.add_argument('--core_id', type = int, default = 0)
+    parser.add_argument('--version', type = str, default = None)
     args = parser.parse_args()
     print(f'running with {args}')
+
+    if args.version is None:
+        import datetime
+        args.version = datetime.date.today().strftime('%Y-%m-%d')
 
     #blimp_tasks = ['distractor_agreement_relational_noun','distractor_agreement_relative_clause']
     zorro_tasks = ['agreement_determiner_noun-across_1_adjective','agreement_determiner_noun-between_neighbors',
@@ -174,7 +179,8 @@ if __name__=='__main__':
         wandb.log(data=out_linzen, step=step_id)
         #wandb.log(data=out_blimp, step=step_id)
         wandb.log(data=out_zorro, step=step_id)
-    model.save_pretrained(f"{args.base_dir}/models/{args.run_name}/ckpt-{step_id}")
+    model_out_dir = f"{args.base_dir}/models/{args.version}/{args.run_name}"
+    model.save_pretrained(f"{model_out_dir}/ckpt-{step_id}")
 
     best_val_loss = np.inf
     print(f'Started training at {time.ctime()}')
@@ -239,13 +245,13 @@ if __name__=='__main__':
                 wandb.log(data=out_linzen, step=step_id)
                 #wandb.log(data=out_blimp, step=step_id)
                 wandb.log(data=out_zorro, step=step_id)
-            model.save_pretrained(f"{args.base_dir}/models/{args.run_name}/ckpt-{step_id}")
+            model.save_pretrained(f"{model_out_dir}/ckpt-{step_id}")
             val_loss = np.mean(val_main_loss)+args.beta*np.mean(val_attn_loss)
             if val_loss<best_val_loss:
                 best_val_loss = val_loss
-                model.save_pretrained(f"{args.base_dir}/models/{args.run_name}/best")
+                model.save_pretrained(f"{model_out_dir}/best")
                 print(f'new best val loss: {best_val_loss}')
-    model.save_pretrained(f"{args.base_dir}/models/{args.run_name}/last")
+    model.save_pretrained(f"{model_out_dir}/last")
     tst_main_loss, tst_attn_loss = evaluate(model,tst_loaders,args,
                                             pretrained_model=pretrained_model,
                                             index_list=index_list,xb_list=xb_list)
@@ -259,7 +265,7 @@ if __name__=='__main__':
         #wandb.log(data=out_blimp, step=step_id)
         wandb.log(data=out_zorro, step=step_id)
 
-    model = AutoModelForCausalLM.from_pretrained(f"{args.base_dir}/models/{args.run_name}/best")
+    model = AutoModelForCausalLM.from_pretrained(f"{model_out_dir}/best")
     model.to(args.device)
     tst_main_loss, tst_attn_loss = evaluate(model,tst_loaders,args,
                                             pretrained_model=pretrained_model,
