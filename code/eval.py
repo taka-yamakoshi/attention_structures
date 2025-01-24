@@ -15,6 +15,7 @@ if __name__=='__main__':
     parser.add_argument('--max_length', type = int, default=None)
     parser.add_argument('--run_seed', type = int, default=1234)
     parser.add_argument('--core_id', type = int, default = 0)
+    parser.add_argument('--version', type = str, required=True)
     args = parser.parse_args()
     print(f'running with {args}')
 
@@ -22,6 +23,7 @@ if __name__=='__main__':
     args.base_dir = os.environ.get("MY_DATA_PATH")
     args.cache_dir = f'{args.base_dir}/cache'
     os.makedirs(args.cache_dir, exist_ok=True)
+    os.makedirs(f'../results/{args.version}', exist_ok=True)
 
     # Set the device
     args.device = torch.device("cuda", index=int(args.core_id))
@@ -41,7 +43,7 @@ if __name__=='__main__':
     args.tokenizer.pad_token = args.tokenizer.eos_token
 
     # Load the model if necessary
-    model = AutoModelForCausalLM.from_pretrained(f'{args.base_dir}/models/{args.model_name}/best')
+    model = AutoModelForCausalLM.from_pretrained(f'{args.base_dir}/models/{args.version}/{args.model_name}/best')
     model.eval()
     model.to(args.device)
 
@@ -65,4 +67,4 @@ if __name__=='__main__':
         tasks.append(key)
         perfs.append(val)
     df = pd.DataFrame.from_dict({'tasks': tasks, 'acc': perfs})
-    df.to_csv(f'../results/{args.model_name}.csv', index=False)
+    df.to_csv(f'../results/{args.version}/{args.model_name}.csv', index=False)
