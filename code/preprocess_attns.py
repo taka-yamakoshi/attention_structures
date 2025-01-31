@@ -8,6 +8,7 @@ from sklearn.decomposition import PCA
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--pretrained_model_name', type = str, default='llama2_babylm_5_0.8_16_1234_8_4_512_2048_nobias_0.0_10000000_32_500_0.0001_constant_5_1000')
+    parser.add_argument('--graph_type', type = str, default='babylm')
     parser.add_argument('--num_layers', type = int, default = 8)
     parser.add_argument('--num_heads', type = int, default = 4)
     args = parser.parse_args()
