@@ -108,7 +108,7 @@ if __name__=='__main__':
     lams = [0.01,0.1,1.0,10]
 
     # Load data
-    x = load_attns(args, pca=True).astype('float16')
+    x = load_attns(args, pca=True)
     print(x.shape)
     for layer_id in range(args.num_layers):
         os.makedirs(f'{args.base_dir}/lsldg/{args.num_bases}bases/layer{layer_id}', exist_ok=True)
