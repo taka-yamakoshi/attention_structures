@@ -27,7 +27,7 @@ def calc_gh(x:np.ndarray, c:np.ndarray,
     print(phi.shape)
     assert phi.shape[0]==num_bases and phi.shape[1]==num_samples and phi.shape[2]==ndim
     h = phi.mean(axis=1)
-    bsize = 4
+    bsize = 32
     bnum = math.ceil(ndim/bsize)
     g = []
     for i in range(bnum):
@@ -108,7 +108,7 @@ if __name__=='__main__':
     lams = [0.01,0.1,1.0,10]
 
     # Load data
-    x = load_attns(args, pca=True)
+    x = load_attns(args, pca=True).astype('float16')
     print(x.shape)
     for layer_id in range(args.num_layers):
         os.makedirs(f'{args.base_dir}/lsldg/{args.num_bases}bases/layer{layer_id}', exist_ok=True)
