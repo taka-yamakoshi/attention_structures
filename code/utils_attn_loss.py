@@ -61,15 +61,23 @@ def load_attn_job(job_id, path):
     print(f"Loading File{job_id}")
     return np.load(path)
 
-def load_attns(args):
-    if args.graph_type.startswith('tree') or args.graph_type.startswith('nback'):
-        attns_path = f'{args.base_dir}/attns/{args.pretrained_model_name}/attns.npy'
-        attns = np.load(attns_path)
-    else:
-        pool_args = [(i, path) for i, path in enumerate(glob.glob(f'{args.base_dir}/attns/{args.pretrained_model_name}/attns_*.npy'))]
+def load_attns(args, pca=False):
+    if pca:
+        pool_args = [(i, path) for i, path in enumerate(glob.glob(f'{args.base_dir}/attns/prep/{args.pretrained_model_name}/attns_*.npy'))]
         with Pool(processes=4) as p:
             attns = p.starmap(load_attn_job,pool_args)
-        attns = np.concatenate(attns, axis=0)
+        attns = np.stack(attns, axis=0)
+        assert len(attns.shape)==5, f"attns has an expected shape, {attns.shape}."
+        attns = attns.transpose(1,0,2,3,4)
+    else:
+        if args.graph_type.startswith('tree') or args.graph_type.startswith('nback'):
+            attns_path = f'{args.base_dir}/attns/{args.pretrained_model_name}/attns.npy'
+            attns = np.load(attns_path)
+        else:
+            pool_args = [(i, path) for i, path in enumerate(glob.glob(f'{args.base_dir}/attns/{args.pretrained_model_name}/attns_*.npy'))]
+            with Pool(processes=4) as p:
+                attns = p.starmap(load_attn_job,pool_args)
+            attns = np.concatenate(attns, axis=0)
     print('Finished Loading')
     return attns
 
@@ -170,3 +178,6 @@ def calc_graph_centers(xn):
         center_ids.append(dist.argmin(dim=-1))
     center_ids = torch.cat(center_ids)
     return torch.stack([xn[i][cid] for i, cid in enumerate(center_ids)])
+
+def calc_attn_loss_lsldg(args, attns, layer_ids):
+    return None
