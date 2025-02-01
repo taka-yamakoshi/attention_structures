@@ -25,7 +25,7 @@ def calc_gh(x:np.ndarray, c:np.ndarray,
     phi = -gauss_exp(x,c,sig)[:,:,None]/(sig**2) + ((c[:,None,:]-x[None,:,:])/(sig**2))*psi
     assert phi.shape[0]==num_bases and phi.shape[1]==num_samples and phi.shape[2]==ndim
     h = phi.mean(axis=1)
-    bsize = 16
+    bsize = 4
     bnum = math.ceil(ndim/bsize)
     g = []
     for i in range(bnum):
