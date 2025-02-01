@@ -20,11 +20,9 @@ def calc_gh(x:np.ndarray, c:np.ndarray,
             sig:float,
             device:torch.device):
     psi = calc_psi(x,c,sig)
-    print(psi.shape)
     assert len(psi.shape)==3
     num_bases, num_samples, ndim = psi.shape
     phi = -gauss_exp(x,c,sig)[:,:,None]/(sig**2) + ((c[:,None,:]-x[None,:,:])/(sig**2))*psi
-    print(phi.shape)
     assert phi.shape[0]==num_bases and phi.shape[1]==num_samples and phi.shape[2]==ndim
     h = phi.mean(axis=1)
     bsize = 32
@@ -32,7 +30,6 @@ def calc_gh(x:np.ndarray, c:np.ndarray,
     g = []
     for i in range(bnum):
         tpsi = torch.tensor(psi[:,:,bsize*i:bsize*(i+1)]).to(device)
-        print(tpsi.shape)
         g.append((tpsi.permute(2,0,1)@tpsi.permute(2,1,0)).to('cpu').numpy())
     g = np.concatenate(g)
     g /= num_samples
