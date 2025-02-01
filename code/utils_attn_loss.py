@@ -67,7 +67,7 @@ def load_attns(args):
         attns = np.load(attns_path)
     else:
         pool_args = [(i, path) for i, path in enumerate(glob.glob(f'{args.base_dir}/attns/{args.pretrained_model_name}/attns_*.npy'))]
-        with Pool(processes=16) as p:
+        with Pool(processes=4) as p:
             attns = p.starmap(load_attn_job,pool_args)
         attns = np.concatenate(attns, axis=0)
     print('Finished Loading')
@@ -113,35 +113,51 @@ def calc_attn_loss_faiss(args, index_list, xb_list, attns, layer_ids):
     # attns.shape = (nlayers, batchsize, nheads, seqlen, seqlen)
     attn_loss = 0
     for layer_id in layer_ids:
-        attn = attns[layer_id]
-        faiss_index = index_list[layer_id]
-        xb = xb_list[layer_id]
-        assert len(attn.shape)==4
-        xq = attn.clone().detach().cpu().numpy().astype('float32')
-        xq = xq.reshape((xq.shape[0]*xq.shape[1],xq.shape[2]*xq.shape[3]))
-        start = time.time()
-        _, I = faiss_index.search(xq, args.nneighbors)
-        print(f'{time.time()-start}')
+        attn = attns[layer_id] # attention matrices in the model that is being trained
+        faiss_index = index_list[layer_id] # trained faiss_index
+        xb = xb_list[layer_id] # bag of attention matrices from the pretrained model
+        assert len(attn.shape)==4 # batchsize, nheads, seqlen, seqlen
 
+        # create no_grad version of attn to query the faiss_index
+        xq = attn.clone().detach().cpu().numpy().astype('float32')
+        xq = xq.reshape((xq.shape[0],xq.shape[1],xq.shape[2]*xq.shape[3])) # batchsize, nheads, seqlen*seqlen
+        xq = xq.reshape((xq.shape[0]*xq.shape[1],xq.shape[2])) # batchsize*nheads, seqlen*seqlen
+
+        # reshape attn to match xb
+        attn = attn.reshape((attn.shape[0],attn.shape[1],attn.shape[2]*attn.shape[3])) # batchsize, nheads, seqlen*seqlen
+        attn = attn.reshape((attn.shape[0]*attn.shape[1],attn.shape[2])) # batchsize*nheads, seqlen*seqlen
+
+        _, I = faiss_index.search(xq, args.nneighbors)
         # xn.shape = (batchsize*nheads, neighbors, seqlen*seqlen)
         xn = torch.tensor(np.array([[xb[sample_id] for sample_id in line] for line in I]),device=args.device)
         assert len(xn.shape)==3 and xn.shape[1]==args.nneighbors
 
-        # instead of comparing to all the neighbors, identify the single "central" neighbor
-        # center_vecs.shape = (batchsize*nheads, seqlen*seqlen)
-        center_vecs = calc_graph_centers(xn)
-
-        # attn.shape = (batchsize*nheads, seqlen*seqlen)
-        attn = attn.view(attn.shape[0]*attn.shape[1],attn.shape[2]*attn.shape[3])
-        assert attn.shape[0]==xn.shape[0] and attn.shape[1]==xn.shape[2]
-
-        # dist.shape = (batchsize*nheads, neighbors)
-        #dist = torch.sqrt(((attn.unsqueeze(1)-xn)**2).sum(dim=-1)+1e-10)
-        #min_dist = -torch.logsumexp(-dist, dim=1)
-
-        min_dist = torch.sqrt(torch.sum((attn-center_vecs)**2,dim=-1)+1e-10)
-        attn_loss += torch.mean(min_dist)
+        if args.version=='central':
+            dist = calc_centrality_dist(attn, xn)
+        elif args.version=='softmin':
+            dist = calc_softmin_dist(attn, xn)
+        elif args.version=='klestimate':
+            dist = calc_klestimate(attn, xn)
+        attn_loss += torch.mean(dist)
     return attn_loss
+
+def calc_centrality_dist(attn, xn):
+    # instead of comparing to all the neighbors, identify the single "central" neighbor
+    # center_vecs.shape = (batchsize*nheads, seqlen*seqlen)
+    center_vecs = calc_graph_centers(xn)
+    assert attn.shape[0]==xn.shape[0] and attn.shape[1]==xn.shape[2]
+    return torch.sqrt(torch.sum((attn-center_vecs)**2,dim=-1)+1e-10) # avoid numerical error by adding 1e-10
+
+def calc_softmin_dist(attn, xn):
+    # use all neighbors and calculate the softmin
+    # dist.shape = (batchsize*nheads, neighbors)
+    dist = torch.sqrt(((attn.unsqueeze(1)-xn)**2).sum(dim=-1)+1e-10) # avoid numerical error by adding 1e-10
+    return -torch.logsumexp(-dist, dim=1)
+
+def calc_klestimate(attn, xn, k=20):
+    assert len(xn.shape)==3 and xn.shape[1]>=k
+    dist_inter = torch.sqrt(((attn-xn[:,k-1,:])**2).sum(dim=-1)+1e-10) # avoid numerical error by adding 1e-10
+    return None
 
 def calc_graph_centers(xn):
     bsize = 10 # limit RAM size to ~1.5GB
@@ -150,7 +166,7 @@ def calc_graph_centers(xn):
     center_ids = []
     for i in range(bnum):
         a = xn[bsize*i:bsize*(i+1),:,:]
-        b = torch.sum(torch.sqrt(torch.sum((a.unsqueeze(2)-a.unsqueeze(1))**2,dim=-1)),dim=-1)
-        center_ids.append(b.argmin(dim=-1))
+        dist = torch.sum(torch.sqrt(torch.sum((a.unsqueeze(2)-a.unsqueeze(1))**2,dim=-1)),dim=-1)
+        center_ids.append(dist.argmin(dim=-1))
     center_ids = torch.cat(center_ids)
     return torch.stack([xn[i][cid] for i, cid in enumerate(center_ids)])
