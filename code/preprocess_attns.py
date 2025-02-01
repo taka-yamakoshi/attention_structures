@@ -20,6 +20,10 @@ if __name__ == '__main__':
     os.makedirs(args.cache_dir, exist_ok=True)
 
     attns = load_attns(args)
+    seed = 2025
+    rng = np.random.RandomState(seed)
+    rand_ids = rng.permutation(attns.shape[0])[:10000]
+    attns = attns[rand_ids]
     #attns = adjust_layer_assignment(attns, args.num_layers)
 
     print(attns.shape)
