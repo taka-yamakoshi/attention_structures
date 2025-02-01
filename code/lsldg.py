@@ -4,6 +4,7 @@ import math
 from typing import List
 import argparse
 import os
+import time
 import pandas as pd
 from sklearn.model_selection import KFold
 from utils_attn_loss import load_attns
@@ -65,9 +66,11 @@ def run(x:np.ndarray, num_bases:int, sigs:List, lams:List, device:torch.device, 
         c = x[rand_ids]
         for sig in sigs:
             for lam in lams:
+                start = time.time()
                 print(f'Running Seed{seed} Sigma{sig} Lambda{lam}')
                 loss = run_cv(x, c, sig, lam, device, nfold=nfold, seed=seed+10)
                 csv_data.append([sig,lam,seed,loss])
+                print(time.time()-start)
     df = pd.DataFrame(csv_data,columns=['sig', 'lam', 'seed', 'loss'])
     #df_min = df.groupby(['sig', 'lam']).mean().reset_index().sort_values('loss').head(1)
     df_min = df.sort_values('loss').head(1)
