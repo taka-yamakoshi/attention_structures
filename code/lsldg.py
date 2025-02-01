@@ -86,6 +86,7 @@ def run(x:np.ndarray, num_bases:int, sigs:List, lams:List, device:torch.device, 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--pretrained_model_name', type = str, required=True)
+    parser.add_argument('--num_layers', type = int, default = 8)
     parser.add_argument('--core_id', type = int, default = 0)
     parser.add_argument('--num_bases', type = int, default = 100)
     parser.add_argument('--nfold', type = int, default = 5)
@@ -95,7 +96,6 @@ if __name__=='__main__':
 
     # Set the storage path
     args.base_dir = os.environ.get("MY_DATA_PATH")
-    os.makedirs(f'{args.base_dir}/lsldg/{args.num_bases}bases/', exist_ok=True)
 
     # Set the device
     args.device = torch.device("cuda", index=int(args.core_id)) if torch.cuda.is_available() else torch.device("cpu")
@@ -106,6 +106,9 @@ if __name__=='__main__':
 
     # Load data
     x = load_attns(args, pca=True)
-    df, sig, lam, seed, theta, rand_ids, c =  run(x, args.num_bases, sigs, lams, args.device, args.nfold)
-    df.to_csv(f'{args.base_dir}/lsldg/{args.num_bases}bases/cv_results.csv', index=False)
-    np.savez(f'{args.base_dir}/lsldg/{args.num_bases}bases/best.npz',sig=sig,lam=lam,theta=theta,rand_ids=rand_ids,centers=c,x=x)
+    print(x.shape)
+    for layer_id in range(args.num_layers):
+        os.makedirs(f'{args.base_dir}/lsldg/{args.num_bases}bases/layer{layer_id}', exist_ok=True)
+        df, sig, lam, seed, theta, rand_ids, c =  run(x[layer_id], args.num_bases, sigs, lams, args.device, args.nfold)
+        df.to_csv(f'{args.base_dir}/lsldg/{args.num_bases}bases/layer{layer_id}/cv_results.csv', index=False)
+        np.savez(f'{args.base_dir}/lsldg/{args.num_bases}bases/layer{layer_id}/best.npz',sig=sig,lam=lam,theta=theta,rand_ids=rand_ids,centers=c,x=x)

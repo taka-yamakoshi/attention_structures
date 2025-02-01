@@ -67,8 +67,7 @@ def load_attns(args, pca=False):
         with Pool(processes=4) as p:
             attns = p.starmap(load_attn_job,pool_args)
         attns = np.stack(attns, axis=0)
-        assert len(attns.shape)==5, f"attns has an expected shape, {attns.shape}."
-        attns = attns.transpose(1,0,2,3,4)
+        assert len(attns.shape)==3, f"attns has an expected shape, {attns.shape}."
     else:
         if args.graph_type.startswith('tree') or args.graph_type.startswith('nback'):
             attns_path = f'{args.base_dir}/attns/{args.pretrained_model_name}/attns.npy'
