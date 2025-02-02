@@ -49,6 +49,7 @@ if __name__=='__main__':
     #                    help="number of clusters/cells, see https://github.com/facebookresearch/faiss/wiki/Guidelines-to-choose-an-index#if-below-1m-vectors-ivfk")
     #parser.add_argument('--nprobe', type = int, default = 16, help="number of cluseters/cells to visit to find the neighbors")
     parser.add_argument('--nneighbors', type = int, default = 64, help="number of neighbors used to calcualte the loss")
+    parser.add_argument('--num_bases', type = int, default = 100, help="number of bases for lsldg")
 
     parser.add_argument('--batchsize_trn', type = int, default = 10)
     parser.add_argument('--batchsize_val', type = int, default = 100)
@@ -97,10 +98,13 @@ if __name__=='__main__':
     args.device = torch.device("cuda", index=int(args.core_id))
 
     # Create faiss index name
+    args.faiss_index_name, args.lsldg_name = None, None
     if args.bias not in ['nobias','direct']:
         if args.graph_type.startswith('tree') or args.graph_type.startswith('babylm'):
             if args.attn_loss_type == 'faiss':
                 args.faiss_index_name = f"HNSW-{args.nneighbors}"
+            elif args.attn_loss_type == 'lsldg':
+                args.lsldg_name = f"lsldg-{args.num_bases}"
 
     # Generate the dataset name and the run name
     if args.dataset_name is None:

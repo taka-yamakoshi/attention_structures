@@ -25,6 +25,8 @@ def gen_run_name(args):
         bias_stat = f'{args.bias}_{args.beta}'
     if args.faiss_index_name is not None:
         bias_stat += f'_faiss_{args.faiss_index_name}'
+    if args.lsldg_name is not None:
+        bias_stat += f'_lsldg_{args.lsldg_name}'
     run_stat = f'{bias_stat}_{args.datasize}_{args.batchsize_trn}_{args.batchsize_val}_{args.lr}_{args.scheduler_type}_{args.num_epochs}_{args.run_seed}'
     return f'{args.model_type}_{gen_dataset_name(args)}_{model_stat}_{run_stat}'
 
