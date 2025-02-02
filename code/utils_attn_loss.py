@@ -208,7 +208,7 @@ def load_pca_comp(args, layer_id):
 
 def load_lsldg(args, layer_id):
     loaded_dict = np.load(f'{args.base_dir}/lsldg/{args.num_bases}bases/layer{layer_id}/best.npz')
-    center = torch.tensor(loaded_dict['center'], device=args.device)
+    center = torch.tensor(loaded_dict['centers'], device=args.device)
     theta = torch.tensor(loaded_dict['theta'], device=args.device)
     sigma = loaded_dict['sigma']
     return center, theta, sigma
