@@ -65,9 +65,9 @@ def load_attn_job(job_id, path):
 
 def load_attns(args, pca=False):
     if pca:
-        pool_args = [(i, path) for i, path in enumerate(glob.glob(f'{args.base_dir}/attns/prep/{args.pretrained_model_name}/attns_*.npy'))]
-        with Pool(processes=4) as p:
-            attns = p.starmap(load_attn_job,pool_args)
+        attns = []
+        for layer_id in range(args.num_layers):
+            attns.append(load_attn_job(0,f'{args.base_dir}/attns/prep/{args.pretrained_model_name}/attns_{layer_id}.npy'))
         attns = np.stack(attns, axis=0)
         assert len(attns.shape)==3, f"attns has an expected shape, {attns.shape}."
     else:
