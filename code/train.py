@@ -9,7 +9,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 
 from utils import gen_dataset_name, gen_run_name, seed_everything, load_config
 from utils_dataset import get_data_loaders
-from utils_attn_loss import calc_faiss_index, get_templates, calc_attn_loss_nback, calc_attn_loss_faiss
+from utils_attn_loss import calc_faiss_index, get_templates, calc_attn_loss_nback, calc_attn_loss_faiss, calc_attn_loss_lsldg, load_lsldg, load_pca_comp
 from utils_eval import evaluate, evaluate_linzen, evaluate_blimp, evaluate_zorro
 
 def gen_scheduler(optimizer, args):
@@ -43,6 +43,7 @@ if __name__=='__main__':
 
     parser.add_argument('--datasize', type = int, default = 1000)
     parser.add_argument('--bias', type = str, default = 'nobias')
+    parser.add_argument('--attn_loss_type', type = str, default = 'lsldg', choices=['faiss','lsldg'])
     parser.add_argument('--beta', type = float, default = 0.1)
     #parser.add_argument('--nlist', type = int, default = 4096, choices=[4096,8192],
     #                    help="number of clusters/cells, see https://github.com/facebookresearch/faiss/wiki/Guidelines-to-choose-an-index#if-below-1m-vectors-ivfk")
@@ -98,7 +99,8 @@ if __name__=='__main__':
     # Create faiss index name
     if args.bias not in ['nobias','direct']:
         if args.graph_type.startswith('tree') or args.graph_type.startswith('babylm'):
-            args.faiss_index_name = f"HNSW-{args.nneighbors}"
+            if args.attn_loss_type == 'faiss':
+                args.faiss_index_name = f"HNSW-{args.nneighbors}"
 
     # Generate the dataset name and the run name
     if args.dataset_name is None:
@@ -113,13 +115,22 @@ if __name__=='__main__':
 
     # Load and train the faiss index
     # This is the most RAM-intensive part
+    index_list, xb_list = None, None
     if args.bias not in ['nobias','direct']:
         if args.graph_type.startswith('tree') or args.graph_type.startswith('babylm'):
-            index_list, xb_list = calc_faiss_index(args)
-        else:
-            index_list, xb_list = None, None
-    else:
-        index_list, xb_list = None, None
+            pca_comps = []
+            for layer_id in range(args.num_layers):
+                pca_comps.append(load_pca_comp(args, layer_id))
+
+            if args.attn_loss_type == 'faiss':
+                index_list, xb_list = calc_faiss_index(args)
+            elif args.attn_loss_type == 'lsldg':
+                centers, thetas, sigmas = [], [], []
+                for layer_id in range(args.num_layers):
+                    center, theta, sigma = load_lsldg(args, layer_id)
+                    centers.append(center)
+                    thetas.append(theta)
+                    sigmas.append(sigma)
 
     # Load the tokenizer
     if args.graph_type.startswith('nback'):
@@ -213,7 +224,10 @@ if __name__=='__main__':
                     templates = get_templates(args, seq_len, batch_size, num_heads)
                     attn_loss = calc_attn_loss_nback(outputs.attentions, templates, layer_ids)
                 elif args.graph_type.startswith('tree') or args.graph_type.startswith('babylm'):
-                    attn_loss = calc_attn_loss_faiss(args, index_list, xb_list, outputs.attentions, layer_ids)
+                    if args.attn_loss_type == 'faiss':
+                        attn_loss = calc_attn_loss_faiss(args, pca_comps, index_list, xb_list, outputs.attentions, layer_ids)
+                    elif args.attn_loss_type == 'lsldg':
+                        attn_loss = calc_attn_loss_lsldg(args, pca_comps, centers, thetas, sigmas, outputs.attentions, layer_ids)
 
             main_loss = outputs.loss
             loss = main_loss + args.beta*attn_loss

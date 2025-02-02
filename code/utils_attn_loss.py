@@ -5,7 +5,9 @@ import faiss
 from multiprocessing import Pool
 import time
 import math
+import pickle
 #import ot
+from lsldg import calc_psi
 
 def get_template_nback(n:int, seq_len:int, batch_size:int, num_heads:int):
     # adjusted for next toke prediction
@@ -81,7 +83,7 @@ def load_attns(args, pca=False):
     return attns
 
 def create_index_job(xb, args):
-    xb = xb.reshape((xb.shape[0]*xb.shape[1],xb.shape[2]*xb.shape[3]))
+    #xb = xb.reshape((xb.shape[0]*xb.shape[1],xb.shape[2]*xb.shape[3]))
     rand_ids = args.rng.permutation(xb.shape[0])
     xb = xb[rand_ids]
     xb = xb.astype('float32')
@@ -89,11 +91,11 @@ def create_index_job(xb, args):
 
     print('Creating Index')
     start = time.time()
-    if args.graph_type in ['nback','tree']:
-        red_dim = 256
-    else:
-        red_dim = 512
-    faiss_index = faiss.index_factory(d, f"PCA{red_dim},HNSW,Flat")
+    #if args.graph_type in ['nback','tree']:
+    #    red_dim = 256
+    #else:
+    #    red_dim = 512
+    faiss_index = faiss.index_factory(d, f"HNSW,Flat")
     #faiss_index = faiss.index_factory(d, f"OPQ16_64,IVF{args.nlist},PQ16x4fsr")
     #faiss_index = faiss.index_cpu_to_gpus_list(faiss_index, gpus=[1,2,3])
     faiss_index.train(xb)
@@ -103,19 +105,22 @@ def create_index_job(xb, args):
     return faiss_index, xb
 
 def calc_faiss_index(args):
-    attns = load_attns(args)
+    attns = load_attns(args, pca=True)
     #attns = adjust_layer_assignment(attns, args.num_layers) # consumes too much memory
     # attns.shape = (batch_size, nlayers, nheads, seqlen, seqlen)
-    assert len(attns.shape)==5
+    #assert len(attns.shape)==5
+    # attns.shape = (nlayers, batch_size*nheads, 512)
+    assert len(attns.shape)==3
     index_list = []
     xb_list = []
     for layer_id in range(args.num_layers):
-        faiss_index, xb = create_index_job(attns[:,layer_id,:,:,:], args)
+        #faiss_index, xb = create_index_job(attns[:,layer_id,:,:,:], args)
+        faiss_index, xb = create_index_job(attns[layer_id], args)
         index_list.append(faiss_index)
         xb_list.append(xb)
     return index_list, xb_list
 
-def calc_attn_loss_faiss(args, index_list, xb_list, attns, layer_ids):
+def calc_attn_loss_faiss(args, pca_comps, index_list, xb_list, attns, layer_ids):
     # xb.shape[0]=5000*20, nlayers=8, nheads=4, seqlen=64
     # attns.shape = (nlayers, batchsize, nheads, seqlen, seqlen)
     attn_loss = 0
@@ -133,6 +138,7 @@ def calc_attn_loss_faiss(args, index_list, xb_list, attns, layer_ids):
         # reshape attn to match xb
         attn = attn.reshape((attn.shape[0],attn.shape[1],attn.shape[2]*attn.shape[3])) # batchsize, nheads, seqlen*seqlen
         attn = attn.reshape((attn.shape[0]*attn.shape[1],attn.shape[2])) # batchsize*nheads, seqlen*seqlen
+        attn = attn@pca_comps[layer_id] - attn.mean(axis=0)@pca_comps[layer_id] # project to pca comps
 
         _, I = faiss_index.search(xq, args.nneighbors)
         # xn.shape = (batchsize*nheads, neighbors, seqlen*seqlen)
@@ -178,5 +184,31 @@ def calc_graph_centers(xn):
     center_ids = torch.cat(center_ids)
     return torch.stack([xn[i][cid] for i, cid in enumerate(center_ids)])
 
-def calc_attn_loss_lsldg(args, attns, layer_ids):
-    return None
+def calc_attn_loss_lsldg(args, pca_comps, centers, thetas, sigmas, attns, layer_ids):
+    attn_loss = 0
+    for layer_id in layer_ids:
+        attn = attns[layer_id]
+        assert len(attn.shape)==4
+        attn = attn.reshape((attn.shape[0],attn.shape[1],attn.shape[2]*attn.shape[3]))
+        attn = attn.reshape((attn.shape[0]*attn.shape[1],attn.shape[2]))
+        attn = attn@pca_comps[layer_id] - attn.mean(axis=0)@pca_comps[layer_id] # project to pca comps
+
+        psi = calc_psi(attn.detach().to('cpu').numpy(), centers[layer_id], sigmas[layer_id]) # nbases, nsamples, ndim
+        psi = psi.transpose(2,1,0) # ndim, nsamples, nbases
+        pgrad = np.einsum('bmn,bn->bm', psi, thetas[layer_id]) # ndim, nsamples
+        pgrad = torch.tensor(pgrad.T, device=args.device)
+
+        attn_loss += torch.mean(torch.sum(pgrad * attn, dim=-1))
+    return attn_loss
+
+def load_pca_comp(args, layer_id):
+    with open(f'{args.base_dir}/pca/{args.pretrained_model_name}/pca_{layer_id}.pkl','rb') as f:
+        pca = pickle.load(f)
+    return torch.tensor(pca.components_.T,device=args.device)
+
+def load_lsldg(args, layer_id):
+    loaded_dict = np.load(f'{args.base_dir}/lsldg/{args.num_bases}bases/layer{layer_id}/best.npz')
+    center = torch.tensor(loaded_dict['center'], device=args.device)
+    theta = torch.tensor(loaded_dict['theta'], device=args.device)
+    sigma = loaded_dict['sigma']
+    return center, theta, sigma
