@@ -7,7 +7,6 @@ import os
 import time
 import pandas as pd
 from sklearn.model_selection import KFold
-from utils_attn_loss import load_attns
 
 def gauss_exp(x:np.ndarray, c:np.ndarray, sig:float):
     assert len(x.shape)==2 and len(c.shape)==2
@@ -105,6 +104,7 @@ if __name__=='__main__':
     lams = [0.01,0.1,1.0,10]
 
     # Load data
+    from utils_attn_loss import load_attns
     x = load_attns(args, pca=True)
     print(x.shape)
     for layer_id in range(args.num_layers):
