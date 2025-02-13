@@ -114,8 +114,8 @@ def calc_faiss_index(args):
     #attns = adjust_layer_assignment(attns, args.num_layers) # consumes too much memory
     # attns.shape = (batch_size, nlayers, nheads, seqlen, seqlen)
     #assert len(attns.shape)==5
-    # attns.shape = (nlayers, batch_size*nheads, 512)
-    assert len(attns.shape)==3
+    # attns.shape = (nlayers, batch_size, nheads, 512)
+    assert len(attns.shape)==4
     index_list = []
     xb_list = []
     for layer_id in range(args.num_layers):
