@@ -61,7 +61,7 @@ def adjust_layer_assignment(attns, nlayers_new):
 
 def load_attn_job(job_id, path):
     print(f"Loading File{job_id}")
-    return np.load(path)
+    return np.load(path).astype('float32')
 
 def load_attns(args, pca=False):
     if pca:
