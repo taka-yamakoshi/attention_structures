@@ -144,7 +144,7 @@ def calc_attn_loss_faiss(args, pca_comps, index_list, xb_list, attns, layer_ids)
             # create no_grad version of attn to query the faiss_index
             xq = attn.clone().detach().cpu().numpy().astype('float32')
             xq = xq.reshape((xq.shape[0],xq.shape[1]*xq.shape[2])) # batchsize, seqlen*seqlen
-            xq = xq@pca_comp - xq.mean(axis=0)@pca_comp # project to pca comps
+            xq = xq@pca_comp.cpu().numpy().astype('float32') - xq.mean(axis=0)@pca_comp.cpu().numpy().astype('float32') # project to pca comps
 
             # reshape attn to match xb
             attn = attn.reshape((attn.shape[0],attn.shape[1]*attn.shape[2])) # batchsize, seqlen*seqlen
