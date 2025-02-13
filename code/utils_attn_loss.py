@@ -67,7 +67,7 @@ def load_attns(args, pca=False):
     if pca:
         attns = []
         for layer_id in range(args.num_layers):
-            attns.append(load_attn_job(0,f'{args.base_dir}/attns/prep/{args.pretrained_model_name}/attns_{layer_id}.npy'))
+            attns.append(load_attn_job(layer_id,f'{args.base_dir}/attns/prep/{args.pretrained_model_name}/attns_{layer_id}.npy'))
         attns = np.stack(attns, axis=0)
         assert len(attns.shape)==3, f"attns has an expected shape, {attns.shape}."
     else:
@@ -150,7 +150,9 @@ def calc_attn_loss_faiss(args, pca_comps, index_list, xb_list, attns, layer_ids)
         elif args.version=='softmin':
             dist = calc_softmin_dist(attn, xn)
         elif args.version=='klestimate':
-            dist = calc_klestimate(attn, xn)
+            dist = calc_klestimate(attn, xn, args.knn)
+        elif args.version=='kde':
+            dist = calc_kde(attn, xn, args.sigma)
         attn_loss += torch.mean(dist)
     return attn_loss
 
@@ -168,9 +170,19 @@ def calc_softmin_dist(attn, xn):
     return -torch.logsumexp(-dist, dim=1)
 
 def calc_klestimate(attn, xn, k=20):
-    assert len(xn.shape)==3 and xn.shape[1]>=k
+    assert len(xn.shape)==3 and xn.shape[1]>=k and len(attn.shape)==2
     dist_inter = torch.sqrt(((attn-xn[:,k-1,:])**2).sum(dim=-1)+1e-10) # avoid numerical error by adding 1e-10
-    return None
+    samples = attn.detach().clone()
+    dist_samples = torch.sqrt(torch.sum((samples.unsqueeze(1)-samples.unsqueeze(0))**2,dim=-1))
+    knn_ids = torch.argsort(dist_samples,dim=-1)[:,k-1]
+    knn_samples = torch.stack([samples[sample_id] for sample_id in knn_ids])
+    dist_intra = torch.sqrt(((attn-knn_samples)**2).sum(dim=-1)+1e-10) # avoid numerical error by adding 1e-10
+    return torch.log(dist_inter) - torch.log(dist_intra)
+
+def calc_kde(attn,xn,sigma=1.0):
+    assert len(xn.shape)==3 and len(attn.shape)==2
+    dist = ((attn.unsqueeze(1)-xn)**2).sum(dim=-1)
+    return -torch.exp(-dist/(2*sigma**2)).sum(dim=-1)
 
 def calc_graph_centers(xn):
     bsize = 10 # limit RAM size to ~1.5GB

@@ -34,8 +34,9 @@ if __name__ == '__main__':
     os.makedirs(f'{args.base_dir}/attns/prep/{args.pretrained_model_name}/',exist_ok=True)
     os.makedirs(f'{args.base_dir}/pca/{args.pretrained_model_name}',exist_ok=True)
     for layer_id in range(args.num_layers):
-        pca = PCA(n_components=512)
-        attns_new = pca.fit_transform(attns[:,layer_id,:,:,:].reshape(batchsize,nheads,seq_len*seq_len).reshape(batchsize*nheads,seq_len*seq_len))
-        np.save(f'{args.base_dir}/attns/prep/{args.pretrained_model_name}/attns_{layer_id}.npy',attns_new)
-        with open(f'{args.base_dir}/pca/{args.pretrained_model_name}/pca_{layer_id}.pkl','wb') as f:
-            pickle.dump(pca,f,protocol=5)
+        for head_id in range(args.num_heads):
+            pca = PCA(n_components=512)
+            attns_new = pca.fit_transform(attns[:,layer_id,head_id,:,:].reshape(batchsize,seq_len*seq_len))
+            np.save(f'{args.base_dir}/attns/prep/{args.pretrained_model_name}/attns_{layer_id}_{head_id}.npy',attns_new)
+            with open(f'{args.base_dir}/pca/{args.pretrained_model_name}/pca_{layer_id}_{head_id}.pkl','wb') as f:
+                pickle.dump(pca,f,protocol=5)
