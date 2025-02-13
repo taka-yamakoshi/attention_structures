@@ -191,6 +191,7 @@ if __name__=='__main__':
     step_id = 0
     val_main_loss, val_attn_loss = evaluate(model,val_loaders,args,
                                             pretrained_model=pretrained_model,
+                                            pca_comps=pca_comps,
                                             index_list=index_list,xb_list=xb_list)
     wandb.log(data={f'validation/val-main-{i+1}':loss
                     for i, loss in enumerate(val_main_loss)},step=step_id)
@@ -260,6 +261,7 @@ if __name__=='__main__':
         if epoch%(max(args.num_epochs//10,1))==0:
             val_main_loss, val_attn_loss = evaluate(model,val_loaders,args,
                                                     pretrained_model=pretrained_model,
+                                                    pca_comps=pca_comps,
                                                     index_list=index_list,xb_list=xb_list)
             wandb.log(data={f'validation/val-main-{i+1}':loss
                             for i, loss in enumerate(val_main_loss)},step=step_id)
@@ -281,6 +283,7 @@ if __name__=='__main__':
     model.save_pretrained(f"{model_out_dir}/last")
     tst_main_loss, tst_attn_loss = evaluate(model,tst_loaders,args,
                                             pretrained_model=pretrained_model,
+                                            pca_comps=pca_comps,
                                             index_list=index_list,xb_list=xb_list)
     wandb.log(data={f'test-last/tst-main-{i+1}':loss for i, loss in enumerate(tst_main_loss)})
     wandb.log(data={f'test-last/tst-attn-{i+1}':loss for i, loss in enumerate(tst_attn_loss)})
@@ -296,6 +299,7 @@ if __name__=='__main__':
     model.to(args.device)
     tst_main_loss, tst_attn_loss = evaluate(model,tst_loaders,args,
                                             pretrained_model=pretrained_model,
+                                            pca_comps=pca_comps,
                                             index_list=index_list,xb_list=xb_list)
     wandb.log(data={f'test-best/tst-main-{i+1}':loss for i, loss in enumerate(tst_main_loss)})
     wandb.log(data={f'test-best/tst-attn-{i+1}':loss for i, loss in enumerate(tst_attn_loss)})

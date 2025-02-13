@@ -7,7 +7,7 @@ import json
 import random
 
 from utils_attn_loss import get_templates, calc_attn_loss_nback, calc_attn_loss_faiss
-def evaluate(model, loaders, args, pretrained_model=None, index_list=None, xb_list=None):
+def evaluate(model, loaders, args, pretrained_model=None, pca_comps=None, index_list=None, xb_list=None):
     main_out = []
     attn_out = []
     model.eval()
@@ -46,7 +46,7 @@ def evaluate(model, loaders, args, pretrained_model=None, index_list=None, xb_li
                             attn_loss = torch.tensor([0]).to(args.device)
                         else:
                             layer_ids = np.arange(args.num_layers) if args.bias.split('-')[2]=='all' else [int(args.bias.split('-')[2])]
-                            attn_loss = calc_attn_loss_faiss(args, index_list, xb_list, outputs.attentions, layer_ids)
+                            attn_loss = calc_attn_loss_faiss(args, pca_comps, index_list, xb_list, outputs.attentions, layer_ids)
                 main_loss_list.append(outputs.loss.item())
                 attn_loss_list.append(attn_loss.item())
             main_out.append(np.mean(main_loss_list))
