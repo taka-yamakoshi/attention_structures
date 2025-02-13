@@ -67,9 +67,14 @@ def load_attns(args, pca=False):
     if pca:
         attns = []
         for layer_id in range(args.num_layers):
-            attns.append(load_attn_job(layer_id,f'{args.base_dir}/attns/prep/{args.pretrained_model_name}/attns_{layer_id}.npy'))
+            attns_layer = []
+            for head_id in range(args.num_heads):
+                print(f'Loading File {layer_id}-{head_id}')
+                attns_layer.append(np.load(f'{args.base_dir}/attns/prep/{args.pretrained_model_name}/attns_{layer_id}_{head_id}.npy'))
+            attns_layer = np.stack(attns_layer, axis=0)
+            attns.append(attns_layer)
         attns = np.stack(attns, axis=0)
-        assert len(attns.shape)==3, f"attns has an expected shape, {attns.shape}."
+        assert len(attns.shape)==4, f"attns has an expected shape, {attns.shape}."
     else:
         if args.graph_type.startswith('tree') or args.graph_type.startswith('nback'):
             attns_path = f'{args.base_dir}/attns/{args.pretrained_model_name}/attns.npy'
@@ -114,10 +119,14 @@ def calc_faiss_index(args):
     index_list = []
     xb_list = []
     for layer_id in range(args.num_layers):
-        #faiss_index, xb = create_index_job(attns[:,layer_id,:,:,:], args)
-        faiss_index, xb = create_index_job(attns[layer_id], args)
-        index_list.append(faiss_index)
-        xb_list.append(xb)
+        index_list_layer = []
+        xb_list_layer = []
+        for head_id in range(args.num_heads):
+            faiss_index, xb = create_index_job(attns[layer_id][head_id], args)
+            index_list_layer.append(faiss_index)
+            xb_list_layer.append(xb)
+        index_list.append(index_list_layer)
+        xb_list.append(xb_list_layer)
     return index_list, xb_list
 
 def calc_attn_loss_faiss(args, pca_comps, index_list, xb_list, attns, layer_ids):
@@ -125,35 +134,36 @@ def calc_attn_loss_faiss(args, pca_comps, index_list, xb_list, attns, layer_ids)
     # attns.shape = (nlayers, batchsize, nheads, seqlen, seqlen)
     attn_loss = 0
     for layer_id in layer_ids:
-        attn = attns[layer_id] # attention matrices in the model that is being trained
-        faiss_index = index_list[layer_id] # trained faiss_index
-        xb = xb_list[layer_id] # bag of attention matrices from the pretrained model
-        assert len(attn.shape)==4 # batchsize, nheads, seqlen, seqlen
+        for head_id in range(args.num_heads):
+            attn = attns[layer_id][:,head_id,:,:] # attention matrices in the model that is being trained
+            faiss_index = index_list[layer_id][head_id] # trained faiss_index
+            xb = xb_list[layer_id][head_id] # bag of attention matrices from the pretrained model
+            pca_comp = pca_comps[layer_id][head_id] # pca components
+            assert len(attn.shape)==3 # batchsize, seqlen, seqlen
 
-        # create no_grad version of attn to query the faiss_index
-        xq = attn.clone().detach().cpu().numpy().astype('float32')
-        xq = xq.reshape((xq.shape[0],xq.shape[1],xq.shape[2]*xq.shape[3])) # batchsize, nheads, seqlen*seqlen
-        xq = xq.reshape((xq.shape[0]*xq.shape[1],xq.shape[2])) # batchsize*nheads, seqlen*seqlen
+            # create no_grad version of attn to query the faiss_index
+            xq = attn.clone().detach().cpu().numpy().astype('float32')
+            xq = xq.reshape((xq.shape[0],xq.shape[1]*xq.shape[2])) # batchsize, seqlen*seqlen
 
-        # reshape attn to match xb
-        attn = attn.reshape((attn.shape[0],attn.shape[1],attn.shape[2]*attn.shape[3])) # batchsize, nheads, seqlen*seqlen
-        attn = attn.reshape((attn.shape[0]*attn.shape[1],attn.shape[2])) # batchsize*nheads, seqlen*seqlen
-        attn = attn@pca_comps[layer_id] - attn.mean(axis=0)@pca_comps[layer_id] # project to pca comps
+            # reshape attn to match xb
+            attn = attn.reshape((attn.shape[0],attn.shape[1]*attn.shape[2])) # batchsize, seqlen*seqlen
+            attn = attn@pca_comp - attn.mean(axis=0)@pca_comp # project to pca comps
 
-        _, I = faiss_index.search(xq, args.nneighbors)
-        # xn.shape = (batchsize*nheads, neighbors, seqlen*seqlen)
-        xn = torch.tensor(np.array([[xb[sample_id] for sample_id in line] for line in I]),device=args.device)
-        assert len(xn.shape)==3 and xn.shape[1]==args.nneighbors
+            _, I = faiss_index.search(xq, args.nneighbors)
+            # xn.shape = (batchsize, neighbors, seqlen*seqlen)
+            xn = torch.tensor(np.array([[xb[sample_id] for sample_id in line] for line in I]),device=args.device)
+            assert len(xn.shape)==3 and xn.shape[1]==args.nneighbors
 
-        if args.version=='central':
-            dist = calc_centrality_dist(attn, xn)
-        elif args.version=='softmin':
-            dist = calc_softmin_dist(attn, xn)
-        elif args.version=='klestimate':
-            dist = calc_klestimate(attn, xn, args.knn)
-        elif args.version=='kde':
-            dist = calc_kde(attn, xn, args.sigma)
-        attn_loss += torch.mean(dist)
+            if args.version=='central':
+                dist = calc_centrality_dist(attn, xn)
+            elif args.version=='softmin':
+                dist = calc_softmin_dist(attn, xn)
+            elif args.version.startswith('klestimate'):
+                dist = calc_klestimate(attn, xn, args.knn)
+            elif args.version.startswith('kde'):
+                dist = calc_kde(attn, xn, args.sigma)
+            attn_loss += torch.mean(dist)
+    attn_loss /= len(layer_ids)*args.num_heads
     return attn_loss
 
 def calc_centrality_dist(attn, xn):
@@ -213,8 +223,8 @@ def calc_attn_loss_lsldg(args, pca_comps, centers, thetas, sigmas, attns, layer_
         attn_loss += torch.mean(torch.sum(pgrad * attn, dim=-1))
     return attn_loss
 
-def load_pca_comp(args, layer_id):
-    with open(f'{args.base_dir}/pca/{args.pretrained_model_name}/pca_{layer_id}.pkl','rb') as f:
+def load_pca_comp(args, layer_id, head_id):
+    with open(f'{args.base_dir}/pca/{args.pretrained_model_name}/pca_{layer_id}_{head_id}.pkl','rb') as f:
         pca = pickle.load(f)
     return torch.tensor(pca.components_.T,device=args.device)
 

@@ -50,6 +50,8 @@ if __name__=='__main__':
     #parser.add_argument('--nprobe', type = int, default = 16, help="number of cluseters/cells to visit to find the neighbors")
     parser.add_argument('--nneighbors', type = int, default = 64, help="number of neighbors used to calcualte the loss")
     parser.add_argument('--num_bases', type = int, default = 100, help="number of bases for lsldg")
+    parser.add_argument('--knn', type = int, default = 10, help="k used to estimate the KL divergence")
+    parser.add_argument('--sigma', type = float, default= 1.0, help="sigma for kernel density estimation")
 
     parser.add_argument('--batchsize_trn', type = int, default = 10)
     parser.add_argument('--batchsize_val', type = int, default = 100)
@@ -67,6 +69,10 @@ if __name__=='__main__':
     if args.version is None:
         import datetime
         args.version = datetime.date.today().strftime('%Y-%m-%d')
+    elif args.version=='klestimate':
+        args.version += f'_{args.knn}'
+    elif args.version=='kde':
+        args.version += f'_{args.sigma:.2f}'
 
     #blimp_tasks = ['distractor_agreement_relational_noun','distractor_agreement_relative_clause']
     zorro_tasks = ['agreement_determiner_noun-across_1_adjective','agreement_determiner_noun-between_neighbors',
@@ -124,7 +130,10 @@ if __name__=='__main__':
         if args.graph_type.startswith('tree') or args.graph_type.startswith('babylm'):
             pca_comps = []
             for layer_id in range(args.num_layers):
-                pca_comps.append(load_pca_comp(args, layer_id))
+                pca_comps_layer = []
+                for head_id in range(args.num_heads):
+                    pca_comps_layer.append(load_pca_comp(args, layer_id, head_id))
+                pca_comps.append(pca_comps_layer)
 
             if args.attn_loss_type == 'faiss':
                 index_list, xb_list = calc_faiss_index(args)
