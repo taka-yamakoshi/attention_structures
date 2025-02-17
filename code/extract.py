@@ -50,6 +50,8 @@ if __name__=='__main__':
     parser.add_argument('--num_epochs', type = int, default = 5)
     parser.add_argument('--run_seed', type = int, default = 1234)
 
+    parser.add_argument('--shuffle', action = 'store_true')
+
     parser.add_argument('--core_id', type = int, default = 0)
     args = parser.parse_args()
     print(f'running with {args}')
@@ -70,14 +72,19 @@ if __name__=='__main__':
     # Set the device
     args.device = torch.device("cuda", index=int(args.core_id))
 
+    if args.shuffle:
+        save_parent_path = 'attns_shuffled'
+    else:
+        save_parent_path = 'attns'
+
     # Generate the dataset name and the run name
     if args.pretrained_model_name is not None:
         assert args.dataset_name is not None
-        save_path = f'{args.base_dir}/attns/{args.pretrained_model_name}'
+        save_path = f'{args.base_dir}/{save_parent_path}/{args.pretrained_model_name}'
     else:
         args.dataset_name = gen_dataset_name(args)
         args.run_name = gen_run_name(args)
-        save_path = f'{args.base_dir}/attns/{args.run_name}'
+        save_path = f'{args.base_dir}/{save_parent_path}/{args.run_name}'
     os.makedirs(save_path+'/', exist_ok=True)
 
     # Fix the seed
@@ -125,14 +132,19 @@ if __name__=='__main__':
     num_sents = 0
     batch_id = 0
     attns = []
+    seed = 2025
+    rng = np.random.RandomState(seed)
     for examples in data_loader:
         loaded_examples = examples.to(args.device)
+        batch_size = len(loaded_examples['input_ids'])
         with torch.no_grad():
+            if args.shuffle:
+                for i in range(batch_size):
+                    perm = torch.tensor(rng.permutation(len(loaded_examples['input_ids'][i])),device=args.device)
+                    loaded_examples['input_ids'][i] = loaded_examples['input_ids'][i][perm]
             outputs = model(input_ids=loaded_examples['input_ids'],
-                            labels=loaded_examples['labels'],
                             attention_mask=loaded_examples['attention_mask'],
                             output_attentions=True)
-        batch_size = len(loaded_examples['input_ids'])
         attns.append(torch.stack(outputs.attentions).transpose(0,1).cpu().numpy())
         num_sents += batch_size
         if num_sents >= args.batchsize_save:
