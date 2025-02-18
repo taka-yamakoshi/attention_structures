@@ -51,6 +51,7 @@ if __name__=='__main__':
     parser.add_argument('--run_seed', type = int, default = 1234)
 
     parser.add_argument('--shuffle', action = 'store_true')
+    parser.add_argument('--initial', action = 'store_true')
 
     parser.add_argument('--core_id', type = int, default = 0)
     args = parser.parse_args()
@@ -72,10 +73,11 @@ if __name__=='__main__':
     # Set the device
     args.device = torch.device("cuda", index=int(args.core_id))
 
+    save_parent_path = 'attns'
+    if args.initial:
+        save_parent_path += '_initial'
     if args.shuffle:
-        save_parent_path = 'attns_shuffled'
-    else:
-        save_parent_path = 'attns'
+        save_parent_path += '_shuffled'
 
     # Generate the dataset name and the run name
     if args.pretrained_model_name is not None:
@@ -105,6 +107,10 @@ if __name__=='__main__':
     dataset, data_loader = get_template_loaders(args)
 
     # Load the model
+    if args.initial:
+        ckpt = 'ckpt-0'
+    else:
+        ckpt = 'best'
     if args.pretrained_model_name is not None:
         if args.pretrained_model_name in ['gpt2','gpt2-medium','gpt2-large','llama2']:
             if args.pretrained_model_name.startswith('gpt2'):
@@ -114,9 +120,9 @@ if __name__=='__main__':
                 model = AutoModelForCausalLM.from_pretrained('meta-llama/Llama-2-7b-hf',
                                                              cache_dir=args.cache_dir, token=os.environ.get('HF_TOKEN'))
         else:
-            model = AutoModelForCausalLM.from_pretrained(f"{args.base_dir}/models/{args.pretrained_model_name}/best")
+            model = AutoModelForCausalLM.from_pretrained(f"{args.base_dir}/models/{args.pretrained_model_name}/{ckpt}")
     else:
-        model = AutoModelForCausalLM.from_pretrained(f"{args.base_dir}/models/{args.run_name}/best")
+        model = AutoModelForCausalLM.from_pretrained(f"{args.base_dir}/models/{args.run_name}/{ckpt}")
     model.to(args.device)
     model.eval()
 
