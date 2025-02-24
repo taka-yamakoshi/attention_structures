@@ -43,7 +43,7 @@ if __name__=='__main__':
 
     parser.add_argument('--datasize', type = int, default = 1000)
     parser.add_argument('--bias', type = str, default = 'nobias')
-    parser.add_argument('--attn_loss_type', type = str, default = 'faiss', choices=['faiss','lsldg'])
+    parser.add_argument('--attn_loss_type', type = str, default = 'faiss', choices=['faiss','lsldg','globalmean'])
     parser.add_argument('--beta', type = float, default = 0.1)
     #parser.add_argument('--nlist', type = int, default = 4096, choices=[4096,8192],
     #                    help="number of clusters/cells, see https://github.com/facebookresearch/faiss/wiki/Guidelines-to-choose-an-index#if-below-1m-vectors-ivfk")
