@@ -63,6 +63,28 @@ def load_attn_job(job_id, path):
     print(f"Loading File{job_id}")
     return np.load(path).astype('float32')
 
+def load_attns_meanstdv(args):
+    attns_mean, attns_stdv = [], []
+    for layer_id in range(args.num_layers):
+        attns_mean_layer, attns_stdv_layer = [], []
+        for head_id in range(args.num_heads):
+            attns_mean_layer.append(np.load(f'{args.base_dir}/attns/stats/{args.pretrained_model_name}/attns_{layer_id}_{head_id}_mean.npy'))
+            attns_stdv_layer.append(np.load(f'{args.base_dir}/attns/stats/{args.pretrained_model_name}/attns_{layer_id}_{head_id}_stdv.npy'))
+        attns_mean_layer = np.stack(attns_mean_layer, axis=0)
+        attns_stdv_layer = np.stack(attns_stdv_layer, axis=0)
+        attns_mean.append(attns_mean_layer)
+        attns_stdv.append(attns_stdv_layer)
+    attns_mean = torch.tensor(np.stack(attns_mean, axis=0), device=args.device)
+    attns_stdv = torch.tensor(np.stack(attns_stdv, axis=0), device=args.device)
+    return attns_mean, attns_stdv
+
+def calc_attn_loss_globalmean(args, attns, attns_mean, attns_stdv):
+    layer_ids = np.arange(args.num_layers) if args.bias.split('-')[2]=='all' else [int(val) for val in args.bias.split('-')[2:]]
+    attn_loss = torch.mean(torch.stack([
+        torch.sum(torch.div((attns[layer_id] - attns_mean[layer_id].unsqueeze(0))**2,attns_stdv[layer_id].unsqueeze(0)**2 + 1e-16), dim=(1,2,3))
+        for layer_id in layer_ids]))
+    return attn_loss
+
 def load_attns(args, pca=False):
     if pca:
         attns = []

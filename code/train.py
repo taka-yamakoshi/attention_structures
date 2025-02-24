@@ -9,7 +9,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 
 from utils import gen_dataset_name, gen_run_name, seed_everything, load_config
 from utils_dataset import get_data_loaders
-from utils_attn_loss import calc_faiss_index, get_templates, calc_attn_loss_nback, calc_attn_loss_faiss, calc_attn_loss_lsldg, load_lsldg, load_pca_comp
+from utils_attn_loss import calc_faiss_index, get_templates, calc_attn_loss_nback, calc_attn_loss_faiss, calc_attn_loss_lsldg, load_lsldg, load_pca_comp, load_attns_meanstdv, calc_attn_loss_globalmean
 from utils_eval import evaluate, evaluate_linzen, evaluate_blimp, evaluate_zorro
 
 def gen_scheduler(optimizer, args):
@@ -123,11 +123,15 @@ if __name__=='__main__':
     seed_everything(args.run_seed)
     args.rng = np.random.default_rng(args.run_seed)
 
-    # Load and train the faiss index
-    # This is the most RAM-intensive part
     index_list, xb_list = None, None
-    if args.bias not in ['nobias','direct']:
+    attns_mean, attns_stdv = None, None
+    if args.bias.startswith('globalmean'):
+        # Load average and standard deviation of attentoin matrices for the globalmean option
+        attns_mean, attns_stdv = load_attns_meanstdv(args)
+    elif args.bias not in ['nobias','direct']:
         if args.graph_type.startswith('tree') or args.graph_type.startswith('babylm'):
+            # Load and train the faiss index
+            # This is the most RAM-intensive part
             pca_comps = []
             for layer_id in range(args.num_layers):
                 pca_comps_layer = []
@@ -164,6 +168,7 @@ if __name__=='__main__':
     args.tokenizer.pad_token = args.tokenizer.eos_token
 
     # Load the model if necessary
+    pretrained_model = None
     if args.bias=='direct':
         if args.graph_type.startswith('nback') or args.graph_type.startswith('tree') or args.pretrained_model_name.startswith('llama2'):
             pretrained_model = AutoModelForCausalLM.from_pretrained(f'{args.base_dir}/models/{args.pretrained_model_name}/best')
@@ -171,8 +176,6 @@ if __name__=='__main__':
             pretrained_model = AutoModelForCausalLM.from_pretrained(args.pretrained_model_name, cache_dir=args.cache_dir)
         pretrained_model.eval()
         pretrained_model.to(args.device)
-    else:
-        pretrained_model = None
 
     dataset, data_collator, val_loaders, tst_loaders = get_data_loaders(args)
     args.num_steps = args.num_epochs*math.ceil(len(dataset['trn'])/args.batchsize_trn)
@@ -192,7 +195,9 @@ if __name__=='__main__':
     val_main_loss, val_attn_loss = evaluate(model,val_loaders,args,
                                             pretrained_model=pretrained_model,
                                             pca_comps=pca_comps,
-                                            index_list=index_list,xb_list=xb_list)
+                                            index_list=index_list,xb_list=xb_list,
+                                            attns_mean=attns_mean,attns_stdv=attns_stdv,
+                                            )
     wandb.log(data={f'validation/val-main-{i+1}':loss
                     for i, loss in enumerate(val_main_loss)},step=step_id)
     wandb.log(data={f'validation/val-attn-{i+1}':loss
@@ -232,8 +237,10 @@ if __name__=='__main__':
                                                           output_attentions=True)
                 attn_loss = torch.mean(torch.stack([torch.mean(torch.sum((attn1-attn2)**2,dim=(1,2,3)),dim=0)
                                                     for attn1, attn2 in zip(outputs.attentions, outputs_pretrained.attentions)]))
+            elif args.bias.startswith('globalmean'):
+                attn_loss = calc_attn_loss_globalmean(args, outputs.attentions, attns_mean, attns_stdv)
             else:
-                layer_ids = np.arange(args.num_layers) if args.bias.split('-')[2]=='all' else [int(args.bias.split('-')[2])]
+                layer_ids = np.arange(args.num_layers) if args.bias.split('-')[2]=='all' else [int(val) for val in args.bias.split('-')[2:]]
                 if args.graph_type.startswith('nback'):
                     templates = get_templates(args, seq_len, batch_size, num_heads)
                     attn_loss = calc_attn_loss_nback(outputs.attentions, templates, layer_ids)
@@ -262,7 +269,9 @@ if __name__=='__main__':
             val_main_loss, val_attn_loss = evaluate(model,val_loaders,args,
                                                     pretrained_model=pretrained_model,
                                                     pca_comps=pca_comps,
-                                                    index_list=index_list,xb_list=xb_list)
+                                                    index_list=index_list,xb_list=xb_list,
+                                                    attns_mean=attns_mean, attns_stdv=attns_stdv,
+                                                    )
             wandb.log(data={f'validation/val-main-{i+1}':loss
                             for i, loss in enumerate(val_main_loss)},step=step_id)
             wandb.log(data={f'validation/val-attn-{i+1}':loss
@@ -284,7 +293,9 @@ if __name__=='__main__':
     tst_main_loss, tst_attn_loss = evaluate(model,tst_loaders,args,
                                             pretrained_model=pretrained_model,
                                             pca_comps=pca_comps,
-                                            index_list=index_list,xb_list=xb_list)
+                                            index_list=index_list,xb_list=xb_list,
+                                            attns_mean=attns_mean, attns_stdv=attns_stdv,
+                                            )
     wandb.log(data={f'test-last/tst-main-{i+1}':loss for i, loss in enumerate(tst_main_loss)})
     wandb.log(data={f'test-last/tst-attn-{i+1}':loss for i, loss in enumerate(tst_attn_loss)})
     if args.graph_type.startswith('babylm'):
@@ -300,7 +311,9 @@ if __name__=='__main__':
     tst_main_loss, tst_attn_loss = evaluate(model,tst_loaders,args,
                                             pretrained_model=pretrained_model,
                                             pca_comps=pca_comps,
-                                            index_list=index_list,xb_list=xb_list)
+                                            index_list=index_list,xb_list=xb_list,
+                                            attns_mean=attns_mean, attns_stdv=attns_stdv,
+                                            )
     wandb.log(data={f'test-best/tst-main-{i+1}':loss for i, loss in enumerate(tst_main_loss)})
     wandb.log(data={f'test-best/tst-attn-{i+1}':loss for i, loss in enumerate(tst_attn_loss)})
     if args.graph_type.startswith('babylm'):

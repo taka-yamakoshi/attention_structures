@@ -6,8 +6,8 @@ from copy import deepcopy
 import json
 import random
 
-from utils_attn_loss import get_templates, calc_attn_loss_nback, calc_attn_loss_faiss
-def evaluate(model, loaders, args, pretrained_model=None, pca_comps=None, index_list=None, xb_list=None):
+from utils_attn_loss import get_templates, calc_attn_loss_nback, calc_attn_loss_faiss, calc_attn_loss_globalmean
+def evaluate(model, loaders, args, pretrained_model=None, pca_comps=None, index_list=None, xb_list=None, attns_mean=None, attns_stdv=None):
     main_out = []
     attn_out = []
     model.eval()
@@ -29,6 +29,8 @@ def evaluate(model, loaders, args, pretrained_model=None, pca_comps=None, index_
                                                           output_attentions=True)
                     attn_loss = torch.mean(torch.stack([torch.mean(torch.sum((attn1-attn2)**2,dim=(1,2,3)),dim=0)
                                                         for attn1, attn2 in zip(outputs.attentions, outputs_pretrained.attentions)]))
+                elif args.bias.startswith('globalmean'):
+                    attn_loss = calc_attn_loss_globalmean(args, outputs.attentions, attns_mean, attns_stdv)
                 else:
                     if args.graph_type.startswith('nback'):
                         if args.bias=='nobias':
