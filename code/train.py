@@ -123,6 +123,7 @@ if __name__=='__main__':
     seed_everything(args.run_seed)
     args.rng = np.random.default_rng(args.run_seed)
 
+    pca_comps = None
     index_list, xb_list = None, None
     attns_mean, attns_stdv = None, None
     if args.bias.split('-')[1]=='globalmean':
