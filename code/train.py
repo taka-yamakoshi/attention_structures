@@ -125,8 +125,8 @@ if __name__=='__main__':
 
     index_list, xb_list = None, None
     attns_mean, attns_stdv = None, None
-    if args.bias.startswith('globalmean'):
-        # Load average and standard deviation of attentoin matrices for the globalmean option
+    if args.bias.split('-')[1]=='globalmean':
+        # Load average and standard deviation of attention matrices for the globalmean option
         attns_mean, attns_stdv = load_attns_meanstdv(args)
     elif args.bias not in ['nobias','direct']:
         if args.graph_type.startswith('tree') or args.graph_type.startswith('babylm'):
@@ -237,7 +237,7 @@ if __name__=='__main__':
                                                           output_attentions=True)
                 attn_loss = torch.mean(torch.stack([torch.mean(torch.sum((attn1-attn2)**2,dim=(1,2,3)),dim=0)
                                                     for attn1, attn2 in zip(outputs.attentions, outputs_pretrained.attentions)]))
-            elif args.bias.startswith('globalmean'):
+            elif args.bias.split('-')[1]=='globalmean':
                 attn_loss = calc_attn_loss_globalmean(args, outputs.attentions, attns_mean, attns_stdv)
             else:
                 layer_ids = np.arange(args.num_layers) if args.bias.split('-')[2]=='all' else [int(val) for val in args.bias.split('-')[2:]]

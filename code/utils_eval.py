@@ -29,7 +29,7 @@ def evaluate(model, loaders, args, pretrained_model=None, pca_comps=None, index_
                                                           output_attentions=True)
                     attn_loss = torch.mean(torch.stack([torch.mean(torch.sum((attn1-attn2)**2,dim=(1,2,3)),dim=0)
                                                         for attn1, attn2 in zip(outputs.attentions, outputs_pretrained.attentions)]))
-                elif args.bias.startswith('globalmean'):
+                elif args.bias.split('-')[1]=='globalmean':
                     attn_loss = calc_attn_loss_globalmean(args, outputs.attentions, attns_mean, attns_stdv)
                 else:
                     if args.graph_type.startswith('nback'):
