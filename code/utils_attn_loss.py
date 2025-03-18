@@ -80,8 +80,11 @@ def load_attns_meanstdv(args):
 
 def calc_attn_loss_globalmean(args, attns, attns_mean, attns_stdv):
     layer_ids = np.arange(args.num_layers) if args.bias.split('-')[2]=='all' else [int(val) for val in args.bias.split('-')[2:]]
+    #attn_loss = torch.mean(torch.stack([
+    #    torch.sum(torch.div((attns[layer_id] - attns_mean[layer_id].unsqueeze(0))**2,attns_stdv[layer_id].unsqueeze(0)**2 + 1e-16), dim=(1,2,3))
+    #    for layer_id in layer_ids]))
     attn_loss = torch.mean(torch.stack([
-        torch.sum(torch.div((attns[layer_id] - attns_mean[layer_id].unsqueeze(0))**2,attns_stdv[layer_id].unsqueeze(0)**2 + 1e-16), dim=(1,2,3))
+        torch.sum((attns[layer_id] - attns_mean[layer_id].unsqueeze(0))**2, dim=(1,2,3))
         for layer_id in layer_ids]))
     return attn_loss
 
