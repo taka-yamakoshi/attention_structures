@@ -76,9 +76,7 @@ if __name__=='__main__':
     args.device = torch.device("cuda", index=int(args.core_id))
 
     # Generate the dataset name and the run name
-    args.dataset_name += f'_{args.max_length}'
     args.run_name = gen_run_name(args)
-    wandb.config.dataset_name = args.dataset_name
     wandb.config.run_name = args.run_name
 
     # Fix the seed

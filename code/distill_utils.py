@@ -17,7 +17,7 @@ def gen_run_name(args):
     else:
         bias_stat = f'{args.pretrained_model_name}_shuffle_{args.shuffle}_{args.beta}'
     run_stat = f'{bias_stat}_{args.datasize}-{args.batchsize_trn}-{args.batchsize_val}_{args.lr}-{args.scheduler_type}-{args.num_epochs}_{args.run_seed}'
-    return f'{args.model_type}_{args.dataset_name}_{model_stat}_{run_stat}'
+    return f'{args.model_type}_{args.dataset_name}-{args.max_length}_{model_stat}_{run_stat}'
 
 def load_config(model_type,args):
     config_kwargs = {
