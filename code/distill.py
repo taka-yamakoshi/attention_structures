@@ -123,11 +123,10 @@ if __name__=='__main__':
                     for i, loss in enumerate(val_main_loss)},step=step_id)
     wandb.log(data={f'validation/val-attn-{i+1}':loss
                     for i, loss in enumerate(val_attn_loss)},step=step_id)
-    if args.graph_type.startswith('babylm'):
-        out_linzen = evaluate_linzen(model, args, num_samples=1000)
-        out_zorro = evaluate_zorro(model, args, zorro_tasks, num_samples=1000)
-        wandb.log(data=out_linzen, step=step_id)
-        wandb.log(data=out_zorro, step=step_id)
+    out_linzen = evaluate_linzen(model, args, num_samples=1000)
+    out_zorro = evaluate_zorro(model, args, zorro_tasks, num_samples=1000)
+    wandb.log(data=out_linzen, step=step_id)
+    wandb.log(data=out_zorro, step=step_id)
     model_out_dir = f"{args.base_dir}/distill_models/{args.version}/{args.run_name}"
     model.save_pretrained(f"{model_out_dir}/ckpt-{step_id}")
 
