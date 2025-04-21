@@ -14,8 +14,8 @@ from distill_utils_eval import evaluate, evaluate_linzen, evaluate_zorro
 
 def gen_scheduler(optimizer, args):
     if args.scheduler_type=='linear':
-        #scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1e-5, end_factor=1.0, total_iters=int(args.num_steps*0.01))
-        scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1e-5, end_factor=1.0, total_iters=int(3125*50*0.01))
+        scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1e-5, end_factor=1.0, total_iters=int(args.num_steps*0.01))
+        #scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1e-5, end_factor=1.0, total_iters=int(3125*50*0.01))
     elif args.scheduler_type=='constant':
         scheduler = torch.optim.lr_scheduler.ConstantLR(optimizer, factor=1.0, total_iters=args.num_steps)
     elif args.scheduler_type=='cosine':
