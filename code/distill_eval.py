@@ -42,7 +42,10 @@ if __name__=='__main__':
         raise NotImplementedError
     args.tokenizer.pad_token = args.tokenizer.eos_token
 
-    model = AutoModelForCausalLM.from_pretrained(f'{args.base_dir}/distill_models/{args.version}/{args.model_name}/best')
+    if args.model_name in ['gpt2']:
+        model = AutoModelForCausalLM.from_pretrained(f'{args.model_name}',cache_dir=args.cache_dir,token=os.environ.get('HF_TOKEN'))
+    else:
+        model = AutoModelForCausalLM.from_pretrained(f'{args.base_dir}/distill_models/{args.version}/{args.model_name}/best')
     model.eval()
     model.to(args.device)
 
