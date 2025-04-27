@@ -25,9 +25,14 @@ def evaluate(model, loaders, args, pretrained_model):
                                                       labels=loaded_examples['labels'],
                                                       attention_mask=loaded_examples['attention_mask'],
                                                       output_attentions=True)
-                attns = torch.stack(outputs.attentions)
-                pretrained_attns = torch.stack(outputs_pretrained.attentions)
-                attn_loss = torch.mean(torch.sum((attns-shuffle_attns_all(pretrained_attns, args))**2,dim=(2,3,4)))
+                if args.distill_type=='attns':
+                    attns = torch.stack(outputs.attentions)
+                    pretrained_attns = torch.stack(outputs_pretrained.attentions)
+                    attn_loss = torch.mean(torch.sum((attns-shuffle_attns_all(pretrained_attns, args))**2,dim=(2,3,4)))
+                elif args.distill_type=='logits':
+                    logprobs = torch.nn.functional.log_softmax(outputs.logits, dim=-1)
+                    pretrained_logprobs = torch.nn.functional.log_softmax(outputs_pretrained.logits, dim=-1)
+                    attn_loss = torch.mean(torch.sum(torch.exp(pretrained_logprobs)*(-logprobs),dim=-1))
 
                 main_loss_list.append(outputs.loss.item())
                 attn_loss_list.append(attn_loss.item())

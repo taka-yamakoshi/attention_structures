@@ -28,6 +28,7 @@ def gen_scheduler(optimizer, args):
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--pretrained_model_name', type = str, default=None)
+    parser.add_argument('--distill_type', type = str, default='attns', choices=['attns','logits'])
     parser.add_argument('--dataset_name', type = str, default=None)
     parser.add_argument('--max_length', type = int, default=None)
 
@@ -150,9 +151,14 @@ if __name__=='__main__':
                                                       labels=loaded_examples['labels'],
                                                       attention_mask=loaded_examples['attention_mask'],
                                                       output_attentions=True)
-            attns = torch.stack(outputs.attentions)
-            pretrained_attns = torch.stack(outputs_pretrained.attentions)
-            attn_loss = torch.mean(torch.sum((attns-shuffle_attns_all(pretrained_attns, args))**2,dim=(2,3,4)))
+            if args.distill_type=='attns':
+                attns = torch.stack(outputs.attentions)
+                pretrained_attns = torch.stack(outputs_pretrained.attentions)
+                attn_loss = torch.mean(torch.sum((attns-shuffle_attns_all(pretrained_attns, args))**2,dim=(2,3,4)))
+            elif args.distill_type=='logits':
+                logprobs = torch.nn.functional.log_softmax(outputs.logits, dim=-1)
+                pretrained_logprobs = torch.nn.functional.log_softmax(outputs_pretrained.logits, dim=-1)
+                attn_loss = torch.mean(torch.sum(torch.exp(pretrained_logprobs)*(-logprobs),dim=-1))
 
             main_loss = outputs.loss
             loss = main_loss + args.beta*attn_loss

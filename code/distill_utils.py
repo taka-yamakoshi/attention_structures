@@ -12,10 +12,15 @@ def seed_everything(seed):
 
 def gen_run_name(args):
     model_stat = f'{args.num_layers}-{args.num_heads}-{args.hidden_size}-{args.intermediate_size}'
-    if args.shuffle is None:
-        bias_stat = f'{args.pretrained_model_name}_noshuffle_{args.beta}'
+    if args.distill_type=='attns':
+        if args.shuffle is None:
+            bias_stat = f'{args.pretrained_model_name}_noshuffle_{args.beta}'
+        else:
+            bias_stat = f'{args.pretrained_model_name}_shuffle_{args.shuffle}_{args.beta}'
+    elif args.distill_type=='logits':
+        bias_stat = f'{args.pretrained_model_name}_logits_{args.beta}'
     else:
-        bias_stat = f'{args.pretrained_model_name}_shuffle_{args.shuffle}_{args.beta}'
+        raise NotImplementedError
     run_stat = f'{bias_stat}_{args.datasize}-{args.batchsize_trn}-{args.batchsize_val}_{args.lr}-{args.scheduler_type}-{args.num_epochs}_{args.run_seed}'
     return f'{args.model_type}_{args.dataset_name}-{args.max_length}_{model_stat}_{run_stat}'
 
