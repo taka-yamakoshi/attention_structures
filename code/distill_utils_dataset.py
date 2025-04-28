@@ -18,6 +18,7 @@ def process_dataset(dataset,args,remove_cols):
 def load_sentences(args):
     data_files = {"trn": "trn.txt", "val": "val.txt", "tst": "tst.txt"}
     dataset = load_dataset(f'{args.base_dir}/babylm/{args.dataset_name}', data_files=data_files, cache_dir=args.cache_dir)
+    dataset = dataset.filter(lambda example: example['text']!='')
     remove_cols = ['text']
 
     tokenized_dataset = process_dataset(dataset, args, remove_cols)
