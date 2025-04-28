@@ -174,6 +174,7 @@ if __name__=='__main__':
                 if torch.isnan(attn_loss):
                     print(logprob_list)
                     print(pretrained_logprob_list)
+                    print(prt_lgprb[mask==1])
                     print(kldiv_list)
                     print(loaded_examples['input_ids'])
                     exit()
