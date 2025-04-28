@@ -175,6 +175,7 @@ if __name__=='__main__':
                     print(logprob_list)
                     print(pretrained_logprob_list)
                     print(pretrained_logprob_list[1][mask==1])
+                    print(shift_attn_mask)
                     print(kldiv_list)
                     print(loaded_examples['input_ids'])
                     exit()
