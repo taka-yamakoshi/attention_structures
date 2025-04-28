@@ -162,23 +162,9 @@ if __name__=='__main__':
                 attn_mask = torch.nn.functional.pad(attn_mask, (0, 1), value=0)
                 shift_attn_mask = attn_mask[..., 1:].contiguous()
                 kldiv = 0.0
-                logprob_list = []
-                pretrained_logprob_list = []
-                kldiv_list = []
                 for mask, lgprb, prt_lgprb in zip(shift_attn_mask, logprobs, pretrained_logprobs):
                     kldiv += torch.mean(torch.sum(torch.exp(prt_lgprb[mask==1])*(-lgprb[mask==1]),dim=-1))
-                    logprob_list.append(lgprb)
-                    pretrained_logprob_list.append(prt_lgprb)
-                    kldiv_list.append(kldiv)
                 attn_loss = kldiv/len(shift_attn_mask)
-                if torch.isnan(attn_loss):
-                    print(logprob_list)
-                    print(pretrained_logprob_list)
-                    print(pretrained_logprob_list[1][shift_attn_mask[1]==1])
-                    print(shift_attn_mask)
-                    print(kldiv_list)
-                    print(loaded_examples['input_ids'])
-                    exit()
 
             main_loss = outputs.loss
             loss = main_loss + args.beta*attn_loss
