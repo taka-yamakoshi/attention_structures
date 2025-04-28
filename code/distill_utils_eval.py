@@ -32,7 +32,13 @@ def evaluate(model, loaders, args, pretrained_model):
                 elif args.distill_type=='logits':
                     logprobs = torch.nn.functional.log_softmax(outputs.logits, dim=-1)
                     pretrained_logprobs = torch.nn.functional.log_softmax(outputs_pretrained.logits, dim=-1)
-                    attn_loss = torch.mean(torch.sum(torch.exp(pretrained_logprobs)*(-logprobs),dim=-1))
+                    attn_mask = loaded_examples['attention_mask']
+                    attn_mask = torch.nn.functional.pad(attn_mask, (0, 1), value=0)
+                    shift_attn_mask = attn_mask[..., 1:].contiguous()
+                    kldiv = 0.0
+                    for mask, lgprb, prt_lgprb in zip(shift_attn_mask, logprobs, pretrained_logprobs):
+                        kldiv += torch.mean(torch.sum(torch.exp(prt_lgprb[mask==1])*(-lgprb[mask==1]),dim=-1))
+                    attn_loss = kldiv/len(shift_attn_mask)
 
                 main_loss_list.append(outputs.loss.item())
                 attn_loss_list.append(attn_loss.item())
