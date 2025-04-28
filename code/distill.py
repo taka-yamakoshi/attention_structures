@@ -165,6 +165,10 @@ if __name__=='__main__':
                 for mask, lgprb, prt_lgprb in zip(shift_attn_mask, logprobs, pretrained_logprobs):
                     kldiv += torch.mean(torch.sum(torch.exp(prt_lgprb[mask==1])*(-lgprb[mask==1]),dim=-1))
                 attn_loss = kldiv/len(shift_attn_mask)
+                if torch.isnan(attn_loss):
+                    print(logprobs)
+                    print(loaded_examples['input_ids'])
+                    exit()
 
             main_loss = outputs.loss
             loss = main_loss + args.beta*attn_loss
