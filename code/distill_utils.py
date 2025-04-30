@@ -17,8 +17,8 @@ def gen_run_name(args):
             bias_stat = f'{args.pretrained_model_name}_noshuffle_{args.beta}'
         else:
             bias_stat = f'{args.pretrained_model_name}_shuffle_{args.shuffle}_{args.beta}'
-    elif args.distill_type=='logits':
-        bias_stat = f'{args.pretrained_model_name}_logits_{args.beta}'
+    elif args.distill_type in ['logits','both']:
+        bias_stat = f'{args.pretrained_model_name}_{args.distill_type}_{args.beta}'
     else:
         raise NotImplementedError
     run_stat = f'{bias_stat}_{args.datasize}-{args.batchsize_trn}-{args.batchsize_val}_{args.lr}-{args.scheduler_type}-{args.num_epochs}_{args.run_seed}'

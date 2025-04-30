@@ -25,11 +25,12 @@ def evaluate(model, loaders, args, pretrained_model):
                                                       labels=loaded_examples['labels'],
                                                       attention_mask=loaded_examples['attention_mask'],
                                                       output_attentions=True)
-                if args.distill_type=='attns':
+                attn_loss = 0.0
+                if args.distill_type in ['attns','both']:
                     attns = torch.stack(outputs.attentions)
                     pretrained_attns = torch.stack(outputs_pretrained.attentions)
-                    attn_loss = torch.mean(torch.sum((attns-shuffle_attns_all(pretrained_attns, args))**2,dim=(2,3,4)))
-                elif args.distill_type=='logits':
+                    attn_loss += torch.mean(torch.sum((attns-shuffle_attns_all(pretrained_attns, args))**2,dim=(2,3,4)))
+                if args.distill_type in ['logits','both']:
                     logprobs = torch.nn.functional.log_softmax(outputs.logits, dim=-1)
                     pretrained_logprobs = torch.nn.functional.log_softmax(outputs_pretrained.logits, dim=-1)
                     attn_mask = loaded_examples['attention_mask']
@@ -38,7 +39,7 @@ def evaluate(model, loaders, args, pretrained_model):
                     kldiv = 0.0
                     for mask, lgprb, prt_lgprb in zip(shift_attn_mask, logprobs, pretrained_logprobs):
                         kldiv += torch.mean(torch.sum(torch.exp(prt_lgprb[mask==1])*(-lgprb[mask==1]),dim=-1))
-                    attn_loss = kldiv/len(shift_attn_mask)
+                    attn_loss += kldiv/len(shift_attn_mask)
 
                 main_loss_list.append(outputs.loss.item())
                 attn_loss_list.append(attn_loss.item())
