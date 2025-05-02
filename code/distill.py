@@ -165,7 +165,10 @@ if __name__=='__main__':
                 kldiv = 0.0
                 for mask, lgprb, prt_lgprb in zip(shift_attn_mask, logprobs, pretrained_logprobs):
                     kldiv += torch.mean(torch.sum(torch.exp(prt_lgprb[mask==1])*(-lgprb[mask==1]),dim=-1))
-                attn_loss += kldiv/len(shift_attn_mask)
+                if args.distill_type=='logits':
+                    attn_loss += kldiv/len(shift_attn_mask)
+                elif args.distill_type=='both':
+                    attn_loss += 10.0*kldiv/len(shift_attn_mask)
 
             main_loss = outputs.loss
             loss = main_loss + args.beta*attn_loss
