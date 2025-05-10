@@ -6,7 +6,7 @@ from copy import deepcopy
 import json
 import random
 
-from distill_utils_attn_loss import shuffle_attns_all
+from distill_utils_attn_loss import calc_attns_l2_loss, calc_logits_kl_loss
 def evaluate(model, loaders, args, pretrained_model):
     main_out = []
     attn_out = []
@@ -25,24 +25,22 @@ def evaluate(model, loaders, args, pretrained_model):
                                                       labels=loaded_examples['labels'],
                                                       attention_mask=loaded_examples['attention_mask'],
                                                       output_attentions=True)
-                attn_loss = 0.0
-                if args.distill_type in ['attns','both']:
-                    attns = torch.stack(outputs.attentions)
-                    pretrained_attns = torch.stack(outputs_pretrained.attentions)
-                    attn_loss += torch.mean(torch.sum((attns-shuffle_attns_all(pretrained_attns, args))**2,dim=(2,3,4)))
-                if args.distill_type in ['logits','both']:
-                    logprobs = torch.nn.functional.log_softmax(outputs.logits, dim=-1)
-                    pretrained_logprobs = torch.nn.functional.log_softmax(outputs_pretrained.logits, dim=-1)
-                    attn_mask = loaded_examples['attention_mask']
-                    attn_mask = torch.nn.functional.pad(attn_mask, (0, 1), value=0)
-                    shift_attn_mask = attn_mask[..., 1:].contiguous()
-                    kldiv = 0.0
-                    for mask, lgprb, prt_lgprb in zip(shift_attn_mask, logprobs, pretrained_logprobs):
-                        kldiv += torch.mean(torch.sum(torch.exp(prt_lgprb[mask==1])*(-lgprb[mask==1]),dim=-1))
-                    if args.distill_type=='logits':
-                        attn_loss += kldiv/len(shift_attn_mask)
-                    elif args.distill_type=='both':
-                        attn_loss += 10.0*kldiv/len(shift_attn_mask)
+
+                if args.distill_type.startswith('attns'):
+                    attn_loss = calc_attns_l2_loss(args, torch.stack(outputs.attentions),
+                                                   torch.stack(outputs_pretrained.attentions))
+                elif args.distill_type.startswith('logits'):
+                    attn_loss = calc_logits_kl_loss(args, torch.nn.functional.log_softmax(outputs.logits, dim=-1),
+                                                    torch.nn.functional.log_softmax(outputs_pretrained.logits, dim=-1),
+                                                    loaded_examples['attention_mask'])
+                elif args.distill_type.startswith('both'):
+                    attn_loss = calc_attns_l2_loss(args, torch.stack(outputs.attentions),
+                                                   torch.stack(outputs_pretrained.attentions))
+                    attn_loss += 10.0*calc_logits_kl_loss(args, torch.nn.functional.log_softmax(outputs.logits, dim=-1),
+                                                          torch.nn.functional.log_softmax(outputs_pretrained.logits, dim=-1),
+                                                          loaded_examples['attention_mask'])
+                else:
+                    raise NotImplementedError
 
                 main_loss_list.append(outputs.loss.item())
                 attn_loss_list.append(attn_loss.item())
