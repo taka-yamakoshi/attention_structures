@@ -23,7 +23,7 @@ def calc_logits_kl_loss(args, logprobs, pretrained_logprobs, attn_mask):
     assert len(logprobs.shape)==3 and len(pretrained_logprobs.shape)==3
     if args.topk is not None:
         bsize, seqlen, _ = pretrained_logprobs.shape
-        topk_indices = torch.argsort(pretrained_logprobs, dim=-1, descending=True)[:,:,:args.topk]
+        topk_indices = torch.argsort(pretrained_logprobs.to(torch.float16), dim=-1, descending=True)[:,:,:args.topk]
         logprobs = logprobs[torch.arange(bsize)[...,None,None],torch.arange(seqlen)[None,...,None],topk_indices]
         pretrained_logprobs = pretrained_logprobs[torch.arange(bsize)[...,None,None],torch.arange(seqlen)[None,...,None],topk_indices]
     attn_mask = torch.nn.functional.pad(attn_mask, (0, 1), value=0)
