@@ -57,6 +57,7 @@ if __name__=='__main__':
 
     if len(args.distill_type.split('-'))==1:
         assert args.distill_type in ['attns','logits','both']
+        args.topk = None
     else:
         assert args.distill_type.split('-')[0]=='logits'
         args.topk = int(args.distill_type.split('-')[1])
