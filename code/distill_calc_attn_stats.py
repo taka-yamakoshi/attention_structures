@@ -39,6 +39,7 @@ if __name__=='__main__':
                 for layer_id in range(12):
                     for head_id in range(12):
                         ent_data.append(['teacher', 'attns_0.0', 10, task_id, sample_id, layer_id, head_id, ent_t[layer_id,head_id]])
+    print('Finished loading the teacher')
 
     # Load students
     if args.datasize==100000:
@@ -50,8 +51,9 @@ if __name__=='__main__':
     else:
         raise NotImplementedError
 
-    for seed in [1000,2000,3000]:
-        for bias in ['attns_0.0','attns_1.0','logits_10.0']:
+    for bias in ['attns_0.0','attns_1.0','logits_10.0']:
+        for seed in [1000,2000,3000]:
+            print(f'seed {seed} of {bias}')
             model_name = f'gpt2_babylm_10M-128_12-12-768-3072_gpt2_{bias}_{args.datasize}-32-100_0.0002-linear-{nepochs}_{seed}'
             student_path = f"{args.base_dir}/distill_attns/{args.version}/{model_name}"
             attns_student = np.load(f'{student_path}/attns.npy')
