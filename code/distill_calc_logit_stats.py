@@ -48,7 +48,7 @@ if __name__=='__main__':
                     seq_len = tokens_student[task_id,sample_id]
                     logprob_s = logprobs_student[task_id,sample_id,:seq_len-1]
                     logprob_t = logprobs_teacher[task_id,sample_id,:seq_len-1]
-                    kldiv = np.mean(np.sum(np.exp(logprob_t)*(-logprob_s),dim=-1))
+                    kldiv = np.mean(np.sum(np.exp(logprob_t)*(-logprob_s),axis=-1))
                     kl_data.append([bias,seed,task_id,sample_id,kldiv])
 
     df = pd.DataFrame(kl_data,columns=head)
