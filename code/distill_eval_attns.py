@@ -44,11 +44,15 @@ if __name__=='__main__':
     args.tokenizer.pad_token = args.tokenizer.eos_token
 
     if args.model_name in ['gpt2']:
-        model = AutoModelForCausalLM.from_pretrained(f'{args.model_name}',cache_dir=args.cache_dir,token=os.environ.get('HF_TOKEN'))
+        model = AutoModelForCausalLM.from_pretrained(f'{args.model_name}',cache_dir=args.cache_dir,token=os.environ.get('HF_TOKEN'),
+                                                     output_attentions=True)
     else:
-        model = AutoModelForCausalLM.from_pretrained(f'{args.base_dir}/distill_models/{args.version}/{args.model_name}/best')
+        model = AutoModelForCausalLM.from_pretrained(f'{args.base_dir}/distill_models/{args.version}/{args.model_name}/best',
+                                                     output_attentions=True)
     model.eval()
     model.to(args.device)
 
-    attns = evaluate_linzen_attns(model, args, num_samples=args.num_samples)
+    attns, logits, num_tokens = evaluate_linzen_attns(model, args, num_samples=args.num_samples)
     np.save(f"{args.attns_out_dir}/attns.npy", attns)
+    np.save(f"{args.attns_out_dir}/logits.npy", logits)
+    np.save(f"{args.attns_out_dir}/num_tokens.npy", num_tokens)
