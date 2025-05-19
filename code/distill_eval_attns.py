@@ -12,7 +12,7 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_name', type = str, default=None)
     parser.add_argument('--max_length', type = int, default=128)
-    parser.add_argument('--num_samples', type = int, default=10)
+    parser.add_argument('--num_samples', type = int, default=3)
     parser.add_argument('--run_seed', type = int, default=1234)
     parser.add_argument('--core_id', type = int, default = 0)
     parser.add_argument('--version', type = str, required=True)
