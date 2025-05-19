@@ -34,7 +34,7 @@ if __name__=='__main__':
     for task_id in range(ntasks):
         for sample_id in range(nsamples):
                 seq_len = tokens_teacher[task_id,sample_id]
-                attn_t = attns_teacher[task_id,sample_id,:,:,:seq_len-1,seq_len-1]
+                attn_t = attns_teacher[task_id,sample_id,:,:,:seq_len-1,:seq_len-1]
                 ent_t = calc_entropy(attn_t)
                 for layer_id in range(12):
                     for head_id in range(12):
@@ -60,8 +60,8 @@ if __name__=='__main__':
             for task_id in range(3):
                 for sample_id in range(nsamples):
                     seq_len = tokens_student[task_id,sample_id]
-                    attn_s = attns_student[task_id,sample_id,:,:,:seq_len-1,seq_len-1]
-                    attn_t = attns_teacher[task_id,sample_id,:,:,:seq_len-1,seq_len-1]
+                    attn_s = attns_student[task_id,sample_id,:,:,:seq_len-1,:seq_len-1]
+                    attn_t = attns_teacher[task_id,sample_id,:,:,:seq_len-1,:seq_len-1]
 
                     ent_s = calc_entropy(attn_s)
                     attn_loss = np.sum((attn_s-attn_t)**2,axis=-1).mean(axis=-1)
