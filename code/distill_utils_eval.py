@@ -251,7 +251,7 @@ def evaluate_blimp_attns(model, args, tasks, num_samples=None):
     rand_ids = rng.permutation(1000)[:num_samples]
     print(rand_ids)
     attns_all, logits_all, num_tokens = [], [], []
-    for task in tasks[:10]:
+    for task in tasks:
         head,text = load_blimp('../blimp/data',task)
         attns_task, logits_task, num_tokens_task = [], [], []
         for line_id in rand_ids:
