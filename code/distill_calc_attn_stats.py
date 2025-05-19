@@ -80,5 +80,5 @@ if __name__=='__main__':
     df_attn_loss = pd.DataFrame(attn_loss_data,columns=attn_loss_head)    
     df_attn_loss.to_csv(f'../distill_attn_stats/{args.version}/attn_loss_{args.datasize}.csv')
 
-    df_ave_attn_loss = pd.DataFrame(ave_attn_loss_data,ave_attn_loss_head)
+    df_ave_attn_loss = pd.DataFrame(ave_attn_loss_data,columns=ave_attn_loss_head)
     df_ave_attn_loss.to_csv(f'../distill_attn_stats/{args.version}/ave_attn_loss_{args.datasize}.csv')
