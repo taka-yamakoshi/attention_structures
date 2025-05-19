@@ -9,7 +9,7 @@ def calc_entropy(attn):
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--datasize', type = str, default=None)
+    parser.add_argument('--datasize', type = int, default=None)
     args = parser.parse_args()
     print(f'running with {args}')
 
