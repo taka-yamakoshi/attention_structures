@@ -254,14 +254,14 @@ def extract_attns(tokenizer,model,device,head,text,max_length=None):
             continue
         tokenized = tokenizer(prefix+' '+option_1, return_tensors='pt',
                               padding='max_length', truncation=True, max_length=max_length).to(device)
-        num_tokens.append(tokenized.attention_mask[0].sum())
-        print(num_tokens[-1])
         with torch.no_grad():
             outputs = model(**tokenized)
         attns = torch.stack(outputs.attentions).to('cpu')
         assert len(attns.shape)==5
         attns_all.append(attns[:,0])
         logits_all.append(outputs.logits[0].to('cpu'))
+        num_tokens.append(tokenized.attention_mask[0].to('cpu').sum().item())
+        print(prefix+' '+option_1, num_tokens[-1])
     return torch.stack(attns_all).numpy(), torch.stack(logits_all).numpy(), np.array(num_tokens)
 
 def evaluate_linzen_attns(model, args, num_samples=None):
