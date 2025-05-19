@@ -59,7 +59,7 @@ if __name__=='__main__':
             attns_student = np.load(f'{student_path}/attns.npy')
             tokens_student = np.load(f'{student_path}/num_tokens.npy')
             assert np.all(tokens_student==tokens_teacher)
-            for task_id in range(3):
+            for task_id in range(ntasks):
                 for sample_id in range(nsamples):
                     seq_len = tokens_student[task_id,sample_id]
                     attn_s = attns_student[task_id,sample_id,:,:,:seq_len-1,:seq_len-1]
