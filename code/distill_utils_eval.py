@@ -240,3 +240,29 @@ def evaluate_zorro(model, args, tasks, num_samples=None):
                               num_samples=num_samples,max_length=args.max_length)
         out[f'eval/zorro_test_{task}'] = df['acc'].mean()
     return out
+
+def extract_attns(tokenizer,model,device,head,text,max_length=None):
+    model.eval()
+    model.to(device)
+    attns_all = []
+    for line in text:
+        prefix = line[head.index('prefix')]
+        option_1, option_2 = line[head.index('option_1')], line[head.index('option_2')]
+        if (not check_sent_length(tokenizer,prefix+' '+option_1,max_length)) or (not check_sent_length(tokenizer,prefix+' '+option_2,max_length)):
+            continue
+        tokenized = tokenizer(prefix+' '+option_1, return_tensors='pt', device=device, 
+                              padding='max_length', truncation=True, max_length=max_length)
+        with torch.no_grad():
+            outputs = model(**tokenized)
+        attns = torch.stack(outputs.attentions).to('cpu')
+        assert len(attns.shape)==5
+        attns_all.append(attns[:,0])
+    return torch.stack(attns_all).numpy()
+
+def evaluate_linzen_attns(model, args, num_samples=None):
+    head,text = load_linzen('../colorlessgreenRNNs/data/linzen_testset')
+    if num_samples is not None:
+        text = random.sample(text,num_samples)
+    else:
+        text = random.sample(text,len(text))
+    return extract_attns(args.tokenizer,model,args.device,head,text,max_length=args.max_length)
