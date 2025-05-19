@@ -2,10 +2,11 @@ import numpy as np
 import torch
 import argparse
 import os
+import glob
 
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from distill_utils import seed_everything
-from distill_utils_eval import evaluate_linzen_attns
+from distill_utils_eval import evaluate_blimp_attns
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
@@ -52,7 +53,11 @@ if __name__=='__main__':
     model.eval()
     model.to(args.device)
 
-    attns, logits, num_tokens = evaluate_linzen_attns(model, args, num_samples=args.num_samples)
+    blimp_prefix = '../blimp/data'
+    blimp_tasks = [file.replace(blimp_prefix+'/','').replace('.jsonl','') for file in glob.glob(f'{blimp_prefix}/*.jsonl')]
+    blimp_tasks.sort()
+
+    attns, logits, num_tokens = evaluate_blimp_attns(model, args, blimp_tasks, num_samples=args.num_samples)
     np.save(f"{args.attns_out_dir}/attns.npy", attns)
     np.save(f"{args.attns_out_dir}/logits.npy", logits)
     np.save(f"{args.attns_out_dir}/num_tokens.npy", num_tokens)

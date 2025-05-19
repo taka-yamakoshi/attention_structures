@@ -241,33 +241,32 @@ def evaluate_zorro(model, args, tasks, num_samples=None):
         out[f'eval/zorro_test_{task}'] = df['acc'].mean()
     return out
 
-def extract_attns(tokenizer,model,device,head,text,max_length=None):
+def evaluate_blimp_attns(model, args, tasks, num_samples=None):
+    tokenizer = args.tokenizer
+    max_length = args.max_length
+    device = args.device
     model.eval()
     model.to(device)
-    attns_all = []
-    logits_all = []
-    num_tokens = []
-    for line in text:
-        prefix = line[head.index('prefix')]
-        option_1, option_2 = line[head.index('option_1')], line[head.index('option_2')]
-        if (not check_sent_length(tokenizer,prefix+' '+option_1,max_length)) or (not check_sent_length(tokenizer,prefix+' '+option_2,max_length)):
-            continue
-        tokenized = tokenizer(prefix+' '+option_1, return_tensors='pt',
-                              padding='max_length', truncation=True, max_length=max_length).to(device)
-        with torch.no_grad():
-            outputs = model(**tokenized)
-        attns = torch.stack(outputs.attentions).to('cpu')
-        assert len(attns.shape)==5
-        attns_all.append(attns[:,0])
-        logits_all.append(outputs.logits[0].to('cpu'))
-        num_tokens.append(tokenized.attention_mask[0].to('cpu').sum().item())
-        print(prefix+' '+option_1, num_tokens[-1])
+    rng = np.random.default_rng(seed=args.run_seed)
+    rand_ids = rng.permutation(1000)[:num_samples]
+    print(rand_ids)
+    attns_all, logits_all, num_tokens = [], [], []
+    for task in tasks[:10]:
+        head,text = load_blimp('../blimp/data',task)
+        attns_task, logits_task, num_tokens_task = [], [], []
+        for line_id in rand_ids:
+            sent = text[line_id][head.index('sent_good')]
+            tokenized = tokenizer(sent, return_tensors='pt',
+                                  padding='max_length', truncation=True, max_length=max_length).to(device)
+            num_tokens_task.append(tokenized.attention_mask[0].to('cpu').sum().item())
+            print(sent, num_tokens_task[-1])
+            with torch.no_grad():
+                outputs = model(**tokenized)
+            attns = torch.stack(outputs.attentions).to('cpu')
+            assert len(attns.shape)==5
+            attns_task.append(attns[:,0])
+            logits_task.append(outputs.logits[0].to('cpu'))
+        attns_all.append(torch.stack(attns_task))
+        logits_all.append(torch.stack(logits_task))
+        num_tokens.append(torch.tensor(num_tokens_task))
     return torch.stack(attns_all).numpy(), torch.stack(logits_all).numpy(), np.array(num_tokens)
-
-def evaluate_linzen_attns(model, args, num_samples=None):
-    head,text = load_linzen('../colorlessgreenRNNs/data/linzen_testset')
-    if num_samples is not None:
-        text = random.sample(text,num_samples)
-    else:
-        text = random.sample(text,len(text))
-    return extract_attns(args.tokenizer,model,args.device,head,text,max_length=args.max_length)
