@@ -259,7 +259,6 @@ def evaluate_blimp_attns(model, args, tasks, num_samples=None):
             tokenized = tokenizer(sent, return_tensors='pt',
                                   padding='max_length', truncation=True, max_length=max_length).to(device)
             num_tokens_task.append(tokenized.attention_mask[0].to('cpu').sum().item())
-            print(sent, num_tokens_task[-1])
             with torch.no_grad():
                 outputs = model(**tokenized)
             attns = torch.stack(outputs.attentions).to('cpu')
