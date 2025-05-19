@@ -43,18 +43,18 @@ if __name__=='__main__':
 
     # Load students
     if args.datasize==100000:
-        nepochs = 50
+        dataset_name, nepochs = 'babylm_10M', 50
     elif args.datasize==500000:
-        nepochs = 10
+        dataset_name, nepochs = 'babylm_10M', 10
     elif args.datasize==1000000:
-        nepochs = 5
+        dataset_name, nepochs = 'babylm_100M', 5
     else:
         raise NotImplementedError
 
     for bias in ['attns_0.0','attns_1.0','logits_10.0']:
         for seed in [1000,2000,3000]:
             print(f'seed {seed} of {bias}')
-            model_name = f'gpt2_babylm_10M-128_12-12-768-3072_gpt2_{bias}_{args.datasize}-32-100_0.0002-linear-{nepochs}_{seed}'
+            model_name = f'gpt2_{dataset_name}-128_12-12-768-3072_gpt2_{bias}_{args.datasize}-32-100_0.0002-linear-{nepochs}_{seed}'
             student_path = f"{args.base_dir}/distill_attns/{args.version}/{model_name}"
             attns_student = np.load(f'{student_path}/attns.npy')
             tokens_student = np.load(f'{student_path}/num_tokens.npy')
