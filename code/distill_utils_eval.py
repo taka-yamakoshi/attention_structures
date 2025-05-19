@@ -250,8 +250,8 @@ def extract_attns(tokenizer,model,device,head,text,max_length=None):
         option_1, option_2 = line[head.index('option_1')], line[head.index('option_2')]
         if (not check_sent_length(tokenizer,prefix+' '+option_1,max_length)) or (not check_sent_length(tokenizer,prefix+' '+option_2,max_length)):
             continue
-        tokenized = tokenizer(prefix+' '+option_1, return_tensors='pt', device=device, 
-                              padding='max_length', truncation=True, max_length=max_length)
+        tokenized = tokenizer(prefix+' '+option_1, return_tensors='pt',
+                              padding='max_length', truncation=True, max_length=max_length).to(device)
         with torch.no_grad():
             outputs = model(**tokenized)
         attns = torch.stack(outputs.attentions).to('cpu')
