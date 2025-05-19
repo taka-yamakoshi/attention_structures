@@ -19,7 +19,7 @@ if __name__=='__main__':
 
     # Load teacher
     teacher_path = f"{args.base_dir}/distill_attns/{args.version}/gpt2"
-    logprobs_teacher = torch.nn.functional.log_softmax(np.load(f'{teacher_path}/logits.npy'),dim=-1).numpy()
+    logprobs_teacher = torch.nn.functional.log_softmax(torch.tensor(np.load(f'{teacher_path}/logits.npy')),dim=-1).numpy()
     tokens_teacher = np.load(f'{teacher_path}/num_tokens.npy')
     ntasks, nsamples = tokens_teacher.shape
     assert len(logprobs_teacher.shape)==4
@@ -40,7 +40,7 @@ if __name__=='__main__':
             print(f'seed {seed} of {bias}')
             model_name = f'gpt2_{dataset_name}-128_12-12-768-3072_gpt2_{bias}_{args.datasize}-32-100_0.0002-linear-{nepochs}_{seed}'
             student_path = f"{args.base_dir}/distill_attns/{args.version}/{model_name}"
-            logprobs_student = torch.nn.functional.log_softmax(np.load(f'{student_path}/logits.npy'),dim=-1).numpy()
+            logprobs_student = torch.nn.functional.log_softmax(torch.tensor(np.load(f'{student_path}/logits.npy')),dim=-1).numpy()
             tokens_student = np.load(f'{student_path}/num_tokens.npy')
             assert np.all(tokens_student==tokens_teacher)
             for task_id in range(ntasks):
