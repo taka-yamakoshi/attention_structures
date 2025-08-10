@@ -127,6 +127,37 @@ def eval_model_pairs(tokenizer,model,device,head,text,max_length=None):
     df['acc'] = df['logprob_1']>df['logprob_2']
     return df
 
+def eval_model_mask(tokenizer,model,device,head,text,max_length=None):
+    assert 'sent_good' in head and 'sent_bad' in head, 'header should contain sent_good and sent_bad'
+    new_head = head + ['logprob_1', 'logprob_2']
+    new_text = []
+    num_sents = 0
+    for line in text:
+        sent_1, sent_2 = line[head.index('sent_good')],line[head.index('sent_bad')]
+        if (not check_sent_length(tokenizer,sent_1,max_length)) or (not check_sent_length(tokenizer,sent_2,max_length)):
+            continue
+        if "verb_id" in head:
+            mask_span_start = int(line[head.index("verb_id")])
+            mask_span_end = mask_span_start + 1
+        else:
+            mask_span_start = 0
+            while sent_1.split(" ")[mask_span_start]==sent_2.split(" ")[mask_span_start]:
+                mask_span_start += 1
+            mask_span_end = -1
+            while sent_1.split(" ")[mask_span_end]==sent_2.split(" ")[mask_span_end]:
+                mask_span_end -= 1
+            mask_span_end += 1
+        assert " ".join(sent_1.split(" ")[mask_span_start:mask_span_end]).lower()==line[head.index("option_1")].lower()
+        assert " ".join(sent_2.split(" ")[mask_span_start:mask_span_end]).lower()==line[head.index("option_2")].lower()
+        logprob_1 = calc_prob_mask(tokenizer, model, device, sent_1, [mask_span_start,mask_span_end])
+        logprob_2 = calc_prob_mask(tokenizer, model, device, sent_2, [mask_span_start,mask_span_end])
+        new_text.append(line+[logprob_1,logprob_2])
+        num_sents += 1
+    print(f'{num_sents} sentences processed')
+    df = pd.DataFrame(data=new_text,columns=new_head)
+    df['acc'] = df['logprob_1']>df['logprob_2']
+    return df
+
 def eval_model_prfix(tokenizer,model,device,head,text,max_length=None):
     assert 'prefix' in head and 'option_1' in head and 'option_2' in head, 'header should contain prefix, option_1 and option_2'
     new_head = head + ['logprob_1', 'logprob_2']
@@ -166,6 +197,33 @@ def calc_prob_prefix(tokenizer,model,device,prefix,cont):
         cont_logprob[pos-start_id] = logprobs[0][pos-1][input_ids[pos]]
     return np.sum(cont_logprob).item()
 
+def calc_prob_mask(tokenizer, model, device, sent, mask_span):
+    tokenized = tokenizer(sent)
+    input_ids = tokenized.input_ids
+    attention_mask = tokenized.attention_mask
+
+    sent_before = " ".join(sent.split(" ")[:mask_span[0]])
+    sent_after = " ".join(sent.split(" ")[:mask_span[1]])
+    start_id = len(tokenizer(sent_before).input_ids)-1
+    end_id = len(tokenizer(sent_after).input_ids)-1
+
+    target = " ".join(sent.split(" ")[mask_span[0]:mask_span[1]])
+    assert tokenizer.decode(input_ids[start_id:end_id]).strip().lower()==target.strip().lower()
+
+    masked_ids = input_ids.clone()
+    masked_ids[start_id:end_id] = tokenizer.mask_token_id
+
+    model.eval()
+    model.to(device)
+    with torch.no_grad():
+        outputs = model(input_ids = torch.tensor(masked_ids).unsqueeze(0).to(device),
+                        attention_mask=torch.tensor(attention_mask).unsqueeze(0).to(device))
+    logprobs = F.log_softmax(outputs.logits.to('cpu'), dim = -1)
+    mask_logprob = np.empty(end_id-start_id)
+    for pos in range(start_id,end_id):
+        mask_logprob[pos-start_id] = logprobs[0][pos][input_ids[pos]]
+    return np.sum(mask_logprob).item()
+
 def calc_prob_causal_lm(tokenizer,model,device,sent):
     tokenized = tokenizer(sent)
     input_ids = tokenized.input_ids
@@ -186,58 +244,67 @@ def calc_prob_causal_lm(tokenizer,model,device,sent):
         sent_logprob[pos-1] = logprobs[0][pos-1][token]
     return np.sum(sent_logprob).item()
 
-def eval_model_linzen(data_path,tokenizer,model,device,num_samples=None,shuffle=True,max_length=None):
+def eval_model_linzen(data_path,tokenizer,model,device,num_samples=None,shuffle=True,max_length=None,mask_eval=False):
     head,text = load_linzen(data_path)
     if num_samples is not None:
         text = random.sample(text,num_samples)
     elif shuffle:
         text = random.sample(text,len(text))
-    return eval_model_prfix(tokenizer,model,device,head,text,max_length)
+    if mask_eval:
+        return eval_model_mask(tokenizer,model,device,head,text,max_length)
+    else:
+        return eval_model_prfix(tokenizer,model,device,head,text,max_length)
 
-def eval_model_blimp(data_path,task,tokenizer,model,device,num_samples=None,shuffle=True,max_length=None):
+def eval_model_blimp(data_path,task,tokenizer,model,device,num_samples=None,shuffle=True,max_length=None,mask_eval=False):
     head,text = load_blimp(data_path,task)
     if num_samples is not None:
         text = random.sample(text,num_samples)
     elif shuffle:
         text = random.sample(text,len(text))
-    return eval_model_pairs(tokenizer,model,device,head,text,max_length)
+    if mask_eval:
+        return eval_model_mask(tokenizer,model,device,head,text,max_length)
+    else:
+        return eval_model_pairs(tokenizer,model,device,head,text,max_length)
 
-def eval_model_zorro(data_path,task,tokenizer,model,device,num_samples=None,shuffle=True,max_length=None):
+def eval_model_zorro(data_path,task,tokenizer,model,device,num_samples=None,shuffle=True,max_length=None,mask_eval=False):
     head,text = load_zorro(data_path,task)
     if num_samples is not None:
         text = random.sample(text,num_samples)
     elif shuffle:
         text = random.sample(text,len(text))
-    return eval_model_pairs(tokenizer,model,device,head,text,max_length)
+    if mask_eval:
+        return eval_model_mask(tokenizer,model,device,head,text,max_length)
+    else:
+        return eval_model_pairs(tokenizer,model,device,head,text,max_length)
 
-def evaluate_linzen(model, args, num_samples=None):
+def evaluate_linzen(model, args, num_samples=None, mask_eval=False):
     df = eval_model_linzen('../colorlessgreenRNNs/data/linzen_testset',
                            args.tokenizer,model,args.device,
-                           num_samples=num_samples,max_length=args.max_length)
+                           num_samples=num_samples,max_length=args.max_length,mask_eval=mask_eval)
     df_group = df.filter(['num_attr','acc']).groupby(['num_attr'],as_index=False).mean()
     return {f'eval/linzen_test_{num_attr}':df_group.loc[lambda d: d['num_attr']==str(num_attr)]['acc'].item() for num_attr in range(5)}
 
-def evaluate_linzen_agg(model, args, num_samples=None):
+def evaluate_linzen_agg(model, args, num_samples=None, mask_eval=False):
     df = eval_model_linzen('../colorlessgreenRNNs/data/linzen_testset',
                            args.tokenizer,model,args.device,
-                           num_samples=num_samples,max_length=args.max_length)
+                           num_samples=num_samples,max_length=args.max_length,mask_eval=mask_eval)
     return {'eval/linzen_test':df['acc'].mean()}
 
-def evaluate_blimp(model, args, tasks, num_samples=None):
+def evaluate_blimp(model, args, tasks, num_samples=None, mask_eval=False):
     out = {}
     for task in tasks:
         df = eval_model_blimp('../blimp/data',task,
                               args.tokenizer,model,args.device,
-                              num_samples=num_samples,max_length=args.max_length)
+                              num_samples=num_samples,max_length=args.max_length,mask_eval=mask_eval)
         out[f'eval/blimp_test_{task}'] = df['acc'].mean()
     return out
 
-def evaluate_zorro(model, args, tasks, num_samples=None):
+def evaluate_zorro(model, args, tasks, num_samples=None, mask_eval=False):
     out = {}
     for task in tasks:
         df = eval_model_zorro('../Zorro/sentences/babyberta',task,
                               args.tokenizer,model,args.device,
-                              num_samples=num_samples,max_length=args.max_length)
+                              num_samples=num_samples,max_length=args.max_length,mask_eval=mask_eval)
         out[f'eval/zorro_test_{task}'] = df['acc'].mean()
     return out
 
