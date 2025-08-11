@@ -138,6 +138,7 @@ def eval_model_mask(tokenizer,model,device,head,text,max_length=None):
             continue
         if sent_1==sent_2:
             print("Same sentence!?")
+            print(sent_1, sent_2)
             continue
         if "verb_id" in head:
             mask_span_start = int(line[head.index("verb_id")])
