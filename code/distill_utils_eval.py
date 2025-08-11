@@ -211,7 +211,7 @@ def calc_prob_mask(tokenizer, model, device, sent, mask_span):
     assert tokenizer.decode(input_ids[start_id:end_id]).strip().lower()==target.strip().lower()
 
     masked_ids = deepcopy(input_ids)
-    masked_ids[start_id:end_id] = tokenizer.mask_token_id
+    masked_ids[start_id:end_id] = [tokenizer.mask_token_id]*(end_id-start_id)
 
     model.eval()
     model.to(device)
