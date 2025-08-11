@@ -147,12 +147,15 @@ def eval_model_mask(tokenizer,model,device,head,text,max_length=None):
             while sent_1.split(" ")[mask_span_end]==sent_2.split(" ")[mask_span_end]:
                 mask_span_end -= 1
             mask_span_end += 1
+            if mask_span_end==0:
+                mask_span_end = None
         if "option_1" in head:
             assert " ".join(sent_1.split(" ")[mask_span_start:mask_span_end]).lower()==line[head.index("option_1")].lower()
             assert " ".join(sent_2.split(" ")[mask_span_start:mask_span_end]).lower()==line[head.index("option_2")].lower()
         else:
             assert " ".join(sent_1.split(" ")[:mask_span_start])==" ".join(sent_2.split(" ")[:mask_span_start]), f"{sent_1} {sent_2} {mask_span_start} {mask_span_end}"
-            assert " ".join(sent_1.split(" ")[mask_span_end:])==" ".join(sent_2.split(" ")[mask_span_end:]), f"{sent_1} {sent_2} {mask_span_start} {mask_span_end}"
+            if mask_span_end is not None:
+                assert " ".join(sent_1.split(" ")[mask_span_end:])==" ".join(sent_2.split(" ")[mask_span_end:]), f"{sent_1} {sent_2} {mask_span_start} {mask_span_end}"
             assert " ".join(sent_1.split(" ")[mask_span_start:mask_span_end])!=" ".join(sent_2.split(" ")[mask_span_start:mask_span_end]), f"{sent_1} {sent_2} {mask_span_start} {mask_span_end}"
         logprob_1 = calc_prob_mask(tokenizer, model, device, sent_1, [mask_span_start,mask_span_end])
         logprob_2 = calc_prob_mask(tokenizer, model, device, sent_2, [mask_span_start,mask_span_end])
