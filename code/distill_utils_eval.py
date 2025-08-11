@@ -133,8 +133,11 @@ def eval_model_mask(tokenizer,model,device,head,text,max_length=None):
     new_text = []
     num_sents = 0
     for line in text:
-        sent_1, sent_2 = line[head.index('sent_good')],line[head.index('sent_bad')]
+        sent_1, sent_2 = line[head.index('sent_good')].strip(),line[head.index('sent_bad')].strip()
         if (not check_sent_length(tokenizer,sent_1,max_length)) or (not check_sent_length(tokenizer,sent_2,max_length)):
+            continue
+        if sent_1==sent_2:
+            print("Same sentence!?")
             continue
         if "verb_id" in head:
             mask_span_start = int(line[head.index("verb_id")])
@@ -265,6 +268,7 @@ def eval_model_linzen(data_path,tokenizer,model,device,num_samples=None,shuffle=
         return eval_model_prfix(tokenizer,model,device,head,text,max_length)
 
 def eval_model_blimp(data_path,task,tokenizer,model,device,num_samples=None,shuffle=True,max_length=None,mask_eval=False):
+    print(task)
     head,text = load_blimp(data_path,task)
     if num_samples is not None:
         text = random.sample(text,num_samples)
@@ -276,6 +280,7 @@ def eval_model_blimp(data_path,task,tokenizer,model,device,num_samples=None,shuf
         return eval_model_pairs(tokenizer,model,device,head,text,max_length)
 
 def eval_model_zorro(data_path,task,tokenizer,model,device,num_samples=None,shuffle=True,max_length=None,mask_eval=False):
+    print(task)
     head,text = load_zorro(data_path,task)
     if num_samples is not None:
         text = random.sample(text,num_samples)
