@@ -5,7 +5,7 @@ import os
 import math
 import time
 
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModelForMaskedLM
 
 from distill_utils_attn_loss import calc_attns_l2_loss, calc_logits_kl_loss
 from distill_utils import gen_run_name, seed_everything, load_config
@@ -111,10 +111,15 @@ if __name__=='__main__':
 
     # Load the model if necessary
     if args.pretrained_model_name.startswith('teacher'):
-        pretrained_model = AutoModelForCausalLM.from_pretrained(f'{args.base_dir}/teachers/{args.pretrained_model_name}/best')
+        model_load_args = {'pretrained_model_name_or_path':f'{args.base_dir}/teachers/{args.pretrained_model_name}/best'}
     else:
-        pretrained_model = AutoModelForCausalLM.from_pretrained(args.pretrained_model_name, 
-                                                                cache_dir=args.cache_dir, token=os.environ.get('HF_TOKEN'))
+        model_load_args = {'pretrained_model_name_or_path':args.pretrained_model_name,
+                           'cache_dir':args.cache_dir,
+                           'token':os.environ.get('HF_TOKEN')}
+    if 'gpt2' in args.pretrained_model_name or 'llama2' in args.pretrained_model_name:
+        pretrained_model = AutoModelForCausalLM.from_pretrained(**model_load_args)
+    elif 'bert' in args.pretrained_model_name:
+        pretrained_model = AutoModelForMaskedLM.from_pretrained(**model_load_args)
     pretrained_model.eval()
     pretrained_model.to(args.device)
 
@@ -124,7 +129,10 @@ if __name__=='__main__':
 
     # Load the model
     config = load_config(args.model_type,args)
-    model = AutoModelForCausalLM.from_config(config)
+    if args.model_type in ['gpt2','llama2']:
+        model = AutoModelForCausalLM.from_config(config)
+    elif args.model_type in ['bert','roberta']:
+        model = AutoModelForMaskedLM.from_config(config)
     model.resize_token_embeddings(len(args.tokenizer))
     model.to(args.device)
 
@@ -222,7 +230,10 @@ if __name__=='__main__':
     wandb.log(data=out_linzen, step=step_id)
     wandb.log(data=out_zorro, step=step_id)
 
-    model = AutoModelForCausalLM.from_pretrained(f"{model_out_dir}/best")
+    if args.model_type in ['gpt2','llama2']:
+        model = AutoModelForCausalLM.from_pretrained(f"{model_out_dir}/best")
+    elif args.model_type in ['bert','roberta']:
+        model = AutoModelForMaskedLM.from_pretrained(f"{model_out_dir}/best")
     model.to(args.device)
     tst_main_loss, tst_attn_loss = evaluate(model,tst_loaders,args,pretrained_model=pretrained_model)
     wandb.log(data={f'test-best/tst-main-{i+1}':loss for i, loss in enumerate(tst_main_loss)})

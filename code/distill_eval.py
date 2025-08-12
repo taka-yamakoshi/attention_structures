@@ -5,7 +5,7 @@ import os
 import glob
 import pandas as pd
 
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModelForMaskedLM
 from distill_utils import seed_everything
 from distill_utils_eval import evaluate_linzen_agg, evaluate_blimp, evaluate_zorro
 
@@ -47,10 +47,16 @@ if __name__=='__main__':
         raise NotImplementedError
     args.tokenizer.pad_token = args.tokenizer.eos_token
 
-    if args.model_name in ['gpt2','bert-base-uncased','roberta-base']:
+    if args.model_name in ['gpt2']:
         model = AutoModelForCausalLM.from_pretrained(f'{args.model_name}',cache_dir=args.cache_dir,token=os.environ.get('HF_TOKEN'))
-    else:
+    elif args.model_name in ['bert-base-uncased','roberta-base']:
+        model = AutoModelForMaskedLM.from_pretrained(f'{args.model_name}',cache_dir=args.cache_dir,token=os.environ.get('HF_TOKEN'))
+    elif args.model_type in ['gpt2','llama2']:
         model = AutoModelForCausalLM.from_pretrained(f'{args.base_dir}/distill_models/{args.version}/{args.model_name}/best')
+    elif args.model_type in ['bert','roberta']:
+        model = AutoModelForMaskedLM.from_pretrained(f'{args.base_dir}/distill_models/{args.version}/{args.model_name}/best')
+    else:
+        raise NotImplementedError
     model.eval()
     model.to(args.device)
 
