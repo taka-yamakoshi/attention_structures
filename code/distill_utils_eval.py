@@ -32,13 +32,13 @@ def evaluate(model, loaders, args, pretrained_model):
                 elif args.distill_type.startswith('logits'):
                     attn_loss = calc_logits_kl_loss(args, torch.nn.functional.log_softmax(outputs.logits, dim=-1),
                                                     torch.nn.functional.log_softmax(outputs_pretrained.logits, dim=-1),
-                                                    loaded_examples['attention_mask'])
+                                                    loaded_examples['labels'])
                 elif args.distill_type.startswith('both'):
                     attn_loss = calc_attns_l2_loss(args, torch.stack(outputs.attentions),
                                                    torch.stack(outputs_pretrained.attentions))
                     attn_loss += 10.0*calc_logits_kl_loss(args, torch.nn.functional.log_softmax(outputs.logits, dim=-1),
                                                           torch.nn.functional.log_softmax(outputs_pretrained.logits, dim=-1),
-                                                          loaded_examples['attention_mask'])
+                                                          loaded_examples['labels'])
                 else:
                     raise NotImplementedError
 

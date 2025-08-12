@@ -52,6 +52,7 @@ if __name__=='__main__':
 
     parser.add_argument('--core_id', type = int, default = 0)
     parser.add_argument('--version', type = str, default = None)
+    parser.add_argument('--save_checkpoints', action="store_true")
     args = parser.parse_args()
     print(f'running with {args}')
 
@@ -98,10 +99,15 @@ if __name__=='__main__':
     elif args.model_type=='llama2':
         args.tokenizer = AutoTokenizer.from_pretrained('meta-llama/Llama-2-7b-hf',
                                                         cache_dir=args.cache_dir, token=os.environ.get('HF_TOKEN'))
+    elif args.model_type=='bert':
+        args.tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased', cache_dir=args.cache_dir)
+    elif args.model_type=='roberta':
+        args.tokenizer = AutoTokenizer.from_pretrained('roberta-base', cache_dir=args.cache_dir)
     else:
         raise NotImplementedError
-    assert args.model_type in ['gpt2','llama2']
-    args.tokenizer.pad_token = args.tokenizer.eos_token
+
+    if args.model_type in ['gpt2','llama2']:
+        args.tokenizer.pad_token = args.tokenizer.eos_token
 
     # Load the model if necessary
     if args.pretrained_model_name.startswith('teacher'):
@@ -165,13 +171,13 @@ if __name__=='__main__':
             elif args.distill_type.startswith('logits'):
                 attn_loss = calc_logits_kl_loss(args, torch.nn.functional.log_softmax(outputs.logits, dim=-1),
                                                 torch.nn.functional.log_softmax(outputs_pretrained.logits, dim=-1),
-                                                loaded_examples['attention_mask'])
+                                                loaded_examples['labels'])
             elif args.distill_type.startswith('both'):
                 attn_loss = calc_attns_l2_loss(args, torch.stack(outputs.attentions),
                                                torch.stack(outputs_pretrained.attentions))
                 attn_loss += 10.0*calc_logits_kl_loss(args, torch.nn.functional.log_softmax(outputs.logits, dim=-1),
                                                       torch.nn.functional.log_softmax(outputs_pretrained.logits, dim=-1),
-                                                      loaded_examples['attention_mask'])
+                                                      loaded_examples['labels'])
             else:
                 raise NotImplementedError
 
@@ -200,7 +206,8 @@ if __name__=='__main__':
             out_zorro = evaluate_zorro(model, args, zorro_tasks, num_samples=1000)
             wandb.log(data=out_linzen, step=step_id)
             wandb.log(data=out_zorro, step=step_id)
-            model.save_pretrained(f"{model_out_dir}/ckpt-{step_id}")
+            if args.save_checkpoints:
+                model.save_pretrained(f"{model_out_dir}/ckpt-{step_id}")
             val_loss = np.mean(val_main_loss)+args.beta*np.mean(val_attn_loss)
             if val_loss<best_val_loss:
                 best_val_loss = val_loss

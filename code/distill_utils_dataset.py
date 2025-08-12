@@ -36,7 +36,10 @@ def get_data_loaders(args):
     dataset['trn'] = dataset['trn'].filter(lambda example, idx: idx < args.datasize, with_indices=True)
     dataset['val'] = dataset['val'].filter(lambda example, idx: idx < 10000, with_indices=True)
     dataset['tst'] = dataset['tst'].filter(lambda example, idx: idx < 10000, with_indices=True)
-    data_collator = DataCollatorForLanguageModeling(tokenizer=args.tokenizer,mlm=False)
+    if "bert" in args.model_type:
+        data_collator = DataCollatorForLanguageModeling(tokenizer=args.tokenizer,mlm=True,mlm_probability=0.15)
+    else:
+        data_collator = DataCollatorForLanguageModeling(tokenizer=args.tokenizer,mlm=False)
 
     # Create the dataloaders
     val_loaders = []
