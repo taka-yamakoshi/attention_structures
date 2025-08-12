@@ -34,6 +34,15 @@ def load_config(model_type,args):
         assert len(args.tokenizer(args.tokenizer.pad_token).input_ids)==3
         config_kwargs['pad_token_id'] = args.tokenizer(args.tokenizer.pad_token).input_ids[1]
         return BertConfig(**config_kwargs)
+    elif model_type=='roberta':
+        from transformers import RobertaConfig
+        assert len(args.tokenizer(args.tokenizer.pad_token).input_ids)==3
+        assert len(args.tokenizer(args.tokenizer.bos_token).input_ids)==3
+        assert len(args.tokenizer(args.tokenizer.eos_token).input_ids)==3
+        config_kwargs['pad_token_id'] = args.tokenizer(args.tokenizer.pad_token).input_ids[1]
+        config_kwargs['bos_token_id'] = args.tokenizer(args.tokenizer.bos_token).input_ids[1]
+        config_kwargs['eos_token_id'] = args.tokenizer(args.tokenizer.eos_token).input_ids[1]
+        return RobertaConfig(**config_kwargs)
     elif model_type=='albert':
         from transformers import AlbertConfig
         assert len(args.tokenizer(args.tokenizer.pad_token).input_ids)==3
