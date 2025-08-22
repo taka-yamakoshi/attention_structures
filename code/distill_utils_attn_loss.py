@@ -29,6 +29,13 @@ def calc_logits_kl_loss(args, logprobs, pretrained_logprobs, labels):
     #attn_mask = torch.nn.functional.pad(attn_mask, (0, 1), value=0)
     #shift_attn_mask = attn_mask[..., 1:].contiguous()
     kldiv = 0.0
+    num_valid_samples = 0
     for lab, lgprb, prt_lgprb in zip(labels, logprobs, pretrained_logprobs):
-        kldiv += torch.mean(torch.sum(torch.exp(prt_lgprb[lab!=-100])*(-lgprb[lab!=-100]),dim=-1))
-    return kldiv/len(labels)
+        if torch.sum(lab!=-100)>0:
+            num_valid_samples += 1
+            kldiv += torch.mean(torch.sum(torch.exp(prt_lgprb[lab!=-100])*(-lgprb[lab!=-100]),dim=-1))
+    if num_valid_samples>0:
+        return kldiv/num_valid_samples
+    else:
+        print("Invalid batch")
+        return torch.tensor([0.0], device=args.device)
